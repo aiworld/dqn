@@ -286,8 +286,8 @@ class CaffeSGDSolver {
 
   shared_ptr<CaffeNet> net() { return net_; }
   void Solve() { return solver_->Solve(); }
-  void OnlineUpdate() { return solver_->OnlineUpdate(); }
-  void PreSolve() { return solver_->PreSolve(); }
+  void OnlineUpdateSetup() { return solver_->OnlineUpdateSetup(); }
+  void OnlineUpdate()      { return solver_->OnlineUpdate();      }
   void SolveResume(const string& resume_file) {
     CheckFile(resume_file);
     return solver_->Solve(resume_file);
@@ -337,11 +337,11 @@ BOOST_PYTHON_MODULE(_caffe) {
 
   boost::python::class_<CaffeSGDSolver, boost::noncopyable>(
       "SGDSolver", boost::python::init<string>())
-      .add_property("net",   &CaffeSGDSolver::net)
-      .def("solve",          &CaffeSGDSolver::Solve)
-      .def("pre_solve",      &CaffeSGDSolver::PreSolve)
-      .def("online_update",  &CaffeSGDSolver::OnlineUpdate)
-      .def("solve",          &CaffeSGDSolver::SolveResume);
+      .add_property("net",        &CaffeSGDSolver::net)
+      .def("solve",               &CaffeSGDSolver::Solve)
+      .def("online_update",       &CaffeSGDSolver::OnlineUpdate)
+      .def("online_update_setup", &CaffeSGDSolver::OnlineUpdateSetup)
+      .def("solve",               &CaffeSGDSolver::SolveResume);
 
   boost::python::class_<vector<CaffeBlob> >("BlobVec")
       .def(vector_indexing_suite<vector<CaffeBlob>, true>());

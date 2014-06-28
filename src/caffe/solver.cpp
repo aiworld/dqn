@@ -126,7 +126,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
 }
 
 template <typename Dtype>
-void Solver<Dtype>::OnlineUpdate(const char* resume_file) {
+void Solver<Dtype>::OnlineUpdateSetup(const char* resume_file) {
   Caffe::set_mode(Caffe::Brew(param_.solver_mode()));
   if (param_.solver_mode() == SolverParameter_SolverMode_GPU &&
       param_.has_device_id()) {
@@ -151,30 +151,17 @@ void Solver<Dtype>::OnlineUpdate(const char* resume_file) {
   if (param_.test_interval()) {
     TestAll();
   }
+}
 
+template <typename Dtype>
+void Solver<Dtype>::OnlineUpdate() {
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
   vector<Blob<Dtype>*> bottom_vec;
-  while (iter_++ < param_.max_iter()) {
-    Dtype loss = net_->ForwardBackward(bottom_vec);
-    ComputeUpdateValue();
-    net_->Update();
-
-    if (param_.display() && iter_ % param_.display() == 0) {
-      LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
-    }
-    if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
-      TestAll();
-    }
-    // Check if we need to do snapshot
-    if (param_.snapshot() && iter_ % param_.snapshot() == 0) {
-      Snapshot();
-    }
-  }
-  // After the optimization is done, always do a snapshot.
+  Dtype loss = net_->ForwardBackward(bottom_vec);
+  ComputeUpdateValue();
+  net_->Update();
   iter_--;
-  Snapshot();
-  LOG(INFO) << "Optimization Done.";
 }
 
 
