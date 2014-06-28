@@ -125,6 +125,58 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   LOG(INFO) << "Optimization Done.";
 }
 
+template <typename Dtype>
+void Solver<Dtype>::OnlineUpdate(const char* resume_file) {
+  Caffe::set_mode(Caffe::Brew(param_.solver_mode()));
+  if (param_.solver_mode() == SolverParameter_SolverMode_GPU &&
+      param_.has_device_id()) {
+    Caffe::SetDevice(param_.device_id());
+  }
+  Caffe::set_phase(Caffe::TRAIN);
+  LOG(INFO) << "Online update for " << net_->name();
+  PreSolve();
+
+  iter_ = 0;
+  if (resume_file) {
+    LOG(INFO) << "Restoring previous solver status from " << resume_file;
+    Restore(resume_file);
+  }
+
+  LOG(INFO) << "and the test interval is " << param_.test_interval();
+
+  // Run a test pass before doing any training to avoid waiting a potentially
+  // very long time (param_.test_interval() training iterations) to report that
+  // there's not enough memory to run the test net and crash, etc.; and to gauge
+  // the effect of the first training iterations.
+  if (param_.test_interval()) {
+    TestAll();
+  }
+
+  // For a network that is trained by the solver, no bottom or top vecs
+  // should be given, and we will just provide dummy vecs.
+  vector<Blob<Dtype>*> bottom_vec;
+  while (iter_++ < param_.max_iter()) {
+    Dtype loss = net_->ForwardBackward(bottom_vec);
+    ComputeUpdateValue();
+    net_->Update();
+
+    if (param_.display() && iter_ % param_.display() == 0) {
+      LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+    }
+    if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
+      TestAll();
+    }
+    // Check if we need to do snapshot
+    if (param_.snapshot() && iter_ % param_.snapshot() == 0) {
+      Snapshot();
+    }
+  }
+  // After the optimization is done, always do a snapshot.
+  iter_--;
+  Snapshot();
+  LOG(INFO) << "Optimization Done.";
+}
+
 
 template <typename Dtype>
 void Solver<Dtype>::TestAll() {

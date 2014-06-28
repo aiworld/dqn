@@ -74,6 +74,7 @@ const Dtype* Blob<Dtype>::gpu_diff() const {
 
 template <typename Dtype>
 Dtype* Blob<Dtype>::mutable_cpu_data() {
+//  LOG(INFO) << "Data is " << data_;
   CHECK(data_);
   return reinterpret_cast<Dtype*>(data_->mutable_cpu_data());
 }
