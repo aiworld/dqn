@@ -155,13 +155,27 @@ void Solver<Dtype>::OnlineUpdateSetup(const char* resume_file) {
 
 template <typename Dtype>
 void Solver<Dtype>::OnlineUpdate() {
+  // Split from Solve because we need to be able to set the input
+  // of the memory data layer between every iteration.
+
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
+  iter_++;
   vector<Blob<Dtype>*> bottom_vec;
   Dtype loss = net_->ForwardBackward(bottom_vec);
   ComputeUpdateValue();
   net_->Update();
-  iter_--;
+
+  if (param_.display() && iter_ % param_.display() == 0) {
+    LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+  }
+  if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
+    TestAll();
+  }
+  // Check if we need to do snapshot
+  if (param_.snapshot() && iter_ % param_.snapshot() == 0) {
+    Snapshot();
+  }
 }
 
 
