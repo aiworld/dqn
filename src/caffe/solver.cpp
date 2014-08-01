@@ -154,6 +154,20 @@ void Solver<Dtype>::OnlineUpdateSetup(const char* resume_file) {
 }
 
 template <typename Dtype>
+void Solver<Dtype>::OnlineForward() {
+  // CQ: Split from Solve because we need to be able to set the input
+  // of the memory data layer between every iteration.
+
+  // For a network that is trained by the solver, no bottom or top vecs
+  // should be given, and we will just provide dummy vecs.
+  iter_++;
+  vector<Blob<Dtype>*> bottom_vec; // CQ: shared ptr?
+
+  Dtype loss;
+  net_->Forward(bottom_vec, &loss);
+}
+
+template <typename Dtype>
 void Solver<Dtype>::OnlineUpdate() {
   // Split from Solve because we need to be able to set the input
   // of the memory data layer between every iteration.

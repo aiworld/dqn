@@ -26,10 +26,28 @@ def get_solver():
     return solver
 
 
-def get_best_action(state):
+def get_q_and_best_action(net, state):
     # fprop the state through the net
     # get the output neuron with the highest activation
-    pass
+
+    # Dummy values. Just humoring set_input_arrays for now.
+    # TODO: Change these to rewards.
+    labels = np.array([3.0], dtype=np.float32)
+
+    # [(1, 4, 84, 84)] image stack array (4, exp).
+    # Treating frames as channels.
+    images = np.array([[frame[0] for frame in state]], dtype=np.float32)
+
+    # TODO: fprop for best action, set Qold
+    net.set_input_arrays(images, labels)
+
+    # TODO: Instead of online forward, do entire q-learning update in C++
+            # Figure out how to get action (neuron) and Q (highest activation) out of C++
+            # Make a custom loss layer with Q-learning gradient derivative.
+
+    q, best_action = net.online_forward()
+    return q, best_action
+
 
 def go():
     setup_matplotlib()
@@ -39,27 +57,24 @@ def go():
     i = 0
     action = actions.MOVE_RIGHT
     while True:
+
+        # TODO: Just store current experience.
+
+        # TODO This is really experience replay below.
+
         state = atari.get_experience_window(EXPERIENCE_SIZE, action)
 
-        # Dummy values. Just humoring set_input_arrays for now.
-        # TODO: Change these to rewards.
-        labels = np.array([3.0], dtype=np.float32)
+        q_old, best_action = get_q_and_best_action(net, state)
 
-        # [(1, 4, 84, 84)] image stack array (4, exp).
-        # Treating frames as channels.
-        images = np.array([[frame[0] for frame in state]], dtype=np.float32)
+        # Get next state (s').
+        next_state = atari.get_experience_window(EXPERIENCE_SIZE, best_action)
 
-        net.set_input_arrays(images, labels)
-        net.forward()
+        # TODO: Qnew = q learning update with reward and next_state
+        q_new, _ = get_q_and_best_action(net, next_state)
 
-        # TODO: fprop for best action, set Qold
-        # TODO: Qnew = q learning update with reward
         # TODO: bprop (Qold - Qnew)^2
 
-        # TODO: Integrate Q-learning algo.
-        action = get_best_action(state)  # max Q
-
-        # Train on random action
+        # TODO: Train on random action
         data = atari.get_random_experience(EXPERIENCE_SIZE)
 
         solver.online_update()

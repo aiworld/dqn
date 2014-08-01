@@ -288,6 +288,7 @@ class CaffeSGDSolver {
   void Solve() { return solver_->Solve(); }
   void OnlineUpdateSetup() { return solver_->OnlineUpdateSetup(); }
   void OnlineUpdate()      { return solver_->OnlineUpdate();      }
+  void OnlineForward()     { return solver_->OnlineForward();     }
   void SolveResume(const string& resume_file) {
     CheckFile(resume_file);
     return solver_->Solve(resume_file);
@@ -340,6 +341,7 @@ BOOST_PYTHON_MODULE(_caffe) {
       .add_property("net",        &CaffeSGDSolver::net)
       .def("solve",               &CaffeSGDSolver::Solve)
       .def("online_update",       &CaffeSGDSolver::OnlineUpdate)
+      .def("online_forward",      &CaffeSGDSolver::OnlineForward)
       .def("online_update_setup", &CaffeSGDSolver::OnlineUpdateSetup)
       .def("solve",               &CaffeSGDSolver::SolveResume);
 

@@ -20,6 +20,7 @@ class Solver {
   inline void Solve(const string resume_file) { Solve(resume_file.c_str()); }
   virtual void OnlineUpdateSetup(const char* resume_file = NULL);
   virtual void OnlineUpdate();
+  virtual void OnlineForward();
   virtual ~Solver() {}
   inline shared_ptr<Net<Dtype> > net() { return net_; }
 
