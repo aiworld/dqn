@@ -60,6 +60,7 @@ void InnerProductLayer<Dtype>::SetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 Dtype InnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     vector<Blob<Dtype>*>* top) {
+  LOG(INFO) << "Craig checking forward inner product";
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = (*top)[0]->mutable_cpu_data();
   const Dtype* weight = this->blobs_[0]->cpu_data();
@@ -77,6 +78,8 @@ template <typename Dtype>
 void InnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     const bool propagate_down,
     vector<Blob<Dtype>*>* bottom) {
+
+  LOG(INFO) << "Craig checking backward inner product";
   const Dtype* top_diff = top[0]->cpu_diff();
   const Dtype* bottom_data = (*bottom)[0]->cpu_data();
   // Gradient with respect to weight
@@ -94,6 +97,7 @@ void InnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         top_diff, this->blobs_[0]->cpu_data(), (Dtype)0.,
         (*bottom)[0]->mutable_cpu_diff());
   }
+  LOG(INFO) << "Craig checking backprop gradient set in python" << (*bottom)[0]->mutable_cpu_diff();
 }
 
 INSTANTIATE_CLASS(InnerProductLayer);

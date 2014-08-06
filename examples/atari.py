@@ -58,15 +58,19 @@ class Atari(object):
         # Get a random starting frame for the specified window size.
         # So if the window size is four, we don't want 1, 2, or 3 for start.
         # Rather 0, 4, 8, or 12
-        start = random.randint(0, (self.MAX_HISTORY_LENGTH - size) / size) * size
-        # ret = np.array([ret], dtype=np.float32)
-        return self.experience_history[start:start + size]
+        max_length = len(self.experience_history)
+        if size > max_length:
+            return None
+        else:
+            start = random.randint(0, (max_length - size) / size) * size
+            end = start + size
+            return list(itertools.islice(self.experience_history, start, end))
 
-    def get_experience_window(self, n, action):
-        return [self.get_experience(action) for _ in itertools.repeat(None, n)]
+    def experience(self, n, action):
+        return [self.experience_frame(action) for _ in itertools.repeat(None, n)]
         # images = np.array([images], dtype=np.float32)
 
-    def get_experience(self, action):
+    def experience_frame(self, action):
         """ Load frame from game video.
         Returns: (image, action, death, reward)
         """
@@ -79,6 +83,17 @@ class Atari(object):
         self.experience_history.append(experience)
         self.send_action(action)
         return experience
+
+    def get_reward_from_experience(self, experience):
+        """Returns sum of rewards
+        """
+        return sum([e[3] for e in experience])
+
+    def get_state_from_experience(self, experience):
+        return [e[0] for e in experience]
+
+    def get_action_from_experience(self, experience):
+        return experience[0][1]
 
     @staticmethod
     def get_death_and_reward(episode):

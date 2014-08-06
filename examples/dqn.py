@@ -5,8 +5,9 @@ import skimage.io
 import skimage.transform
 import sys
 from atari import Atari
+import random
 import dqn.atari_actions as actions
-from examples.dqn import atari_actions
+import math
 
 EXPERIENCE_SIZE = 4
 
@@ -26,26 +27,7 @@ def get_solver():
     return solver
 
 
-def get_q_and_best_action(net, state):
-    # fprop the state through the net
-    # get the output neuron with the highest activation
-
-    # Dummy values. Just humoring set_input_arrays for now.
-    # TODO: Change these to rewards.
-    labels = np.array([3.0], dtype=np.float32)
-
-    # [(1, 4, 84, 84)] image stack array (4, exp).
-    # Treating frames as channels.
-    images = np.array([[frame[0] for frame in state]], dtype=np.float32)
-
-    # TODO: fprop for best action, set Qold
-    net.set_input_arrays(images, labels)
-
-    # TODO: Instead of online forward, do entire q-learning update in C++
-            # Figure out how to get action (neuron) and Q (highest activation) out of C++
-            # Make a custom loss layer with Q-learning gradient derivative.
-
-    q, best_action = net.online_forward()
+def get_q_and_best_action(atari, net, experience_window):
     return q, best_action
 
 
@@ -57,33 +39,113 @@ def go():
     i = 0
     action = actions.MOVE_RIGHT
     while True:
+        # TODO: Set skip frame appropriately (4 except for space invaders, 3).
+        atari.experience(EXPERIENCE_SIZE, action)
+        learn_from_experience_replay(atari, i, net, solver)
+        # TODO: Get next action
 
-        # TODO: Just store current experience.
 
-        # TODO This is really experience replay below.
+def learn_from_experience_replay(atari, i, net, solver):
+    subsequent_experiences = atari.get_random_experience(EXPERIENCE_SIZE * 2)
+    if subsequent_experiences:
+        train(solver, net, subsequent_experiences, atari, i)
 
-        state = atari.get_experience_window(EXPERIENCE_SIZE, action)
 
-        q_old, best_action = get_q_and_best_action(net, state)
+def get_random_q_max_index(q_values):
+    # Randomly break ties between actions with the same Q (quality).
+    max_q = np.nanmax(q_values)
+    if math.isnan(max_q):
+        raise Exception('Exploding activity values?')
+    index_values = filter(lambda x: x[1] == max_q, list(enumerate(q_values)))
+    random.shuffle(index_values)
+    random_max_index = index_values[0][0]
+    return random_max_index
 
-        # Get next state (s').
-        next_state = atari.get_experience_window(EXPERIENCE_SIZE, best_action)
+def train(solver, net, subsequent_experiences, atari, i):
+    experience_one = subsequent_experiences[:EXPERIENCE_SIZE]
+    experience_two = subsequent_experiences[EXPERIENCE_SIZE:]
+    experience_one_state  = atari.get_state_from_experience (experience_one)
+    experience_two_state  = atari.get_state_from_experience (experience_two)
+    experience_two_action = atari.get_action_from_experience(experience_two)
 
-        # TODO: Qnew = q learning update with reward and next_state
-        q_new, _ = get_q_and_best_action(net, next_state)
+    q_values_one = get_q_values(solver, net, experience_one_state)
+    q_old = q_values_one[experience_two_action.value]
 
-        # TODO: bprop (Qold - Qnew)^2
+    q_values_two = get_q_values(solver, net, experience_two_state)
+    q_max_index = get_random_q_max_index(q_values_two)
+    q_max = q_values_two[q_max_index]
 
-        # TODO: Train on random action
-        data = atari.get_random_experience(EXPERIENCE_SIZE)
+    # TODO: Qnew = q learning update with reward and next_state
+    reward = atari.get_reward_from_experience(experience_one)
 
-        solver.online_update()
-        # print solver.net.params.values()[0][0].data
-        # print [(k, v[0].data.shape) for k, v in solver.net.params.items()]
-        if i % 1000 == 0:
-            filters = net.params['conv1'][0].data
-            vis_square(filters.transpose(0, 2, 3, 1))
-        i += 1
+    # TODO: Set the diff to the q-gradient.
+    # net.blobs['fc2'].diff # shape is (1, 4, 1, 1), size = 4
+    net.blobs['fc2'].diff[0][0][0][0] = 0.5
+    # TODO: Make sure this diff is reflected in fc2's backward C++.
+    # Set mutable_cpu_diff of fc2 data to:
+    #   (r + gamma * maxQ(s', a') - Q(s, a)) * Q(s, a)
+    #   (r + gamma * q_new - q_old) * q_old
+    # i.e.
+    # q_new = [2, 4, 6, 8]
+    # q_old = [1, 2, 1, 2]
+    # gamma = 0.5
+    # reward = reward[random_state_index] = 2
+    # gamma * q_new = [1, 2, 3, 4]
+    # r + gamma * q_new = [3, 4, 5, 6] # Do this first because it's new value in essence
+    # r + gamma * q_new - q_old = [3, 4, 5, 6] - [1, 2, 1, 2] = [2, 2, 4, 4]
+    # (r + gamma * q_new - q_old) * q_old = [2, 2, 4, 4] * [1, 2, 1, 2] = [2, 4, 4, 8] # Do separately for each neuron / action (not a dot product)
+    # DOES NOT MAKE SENSE THAT BIGGER Q_OLD GIVES BIGGER GRADIENT CRAIG
+
+
+    # for i, neuron in enumerate(neurons): # Number of actions
+    #   bottom_diff[i] = (reward + gamma * q_new
+
+
+    # Run Backward to update weights.
+
+    # TODO: bprop (Qold - Qnew)^2
+
+    solver.online_update()
+
+    print 'this should be 0.5', net.blobs['fc2'].diff[0][0][0][0]
+
+    # print solver.net.params.values()[0][0].data
+    # print [(k, v[0].data.shape) for k, v in solver.net.params.items()]
+    if i % 1000 == 0:
+        filters = net.params['conv1'][0].data
+        vis_square(filters.transpose(0, 2, 3, 1))
+    i += 1
+#
+# I0805 14:08:11.535507 2082779920 inner_product_layer.cpp:100] Craig checking backprop gradient set in python0x1155df000
+# I0805 14:08:11.535514 2082779920 inner_product_layer.cpp:82] Craig checking backward inner product
+# I0805 14:08:11.537643 2082779920 inner_product_layer.cpp:100] Craig checking backprop gradient set in python0x1176b9e00
+
+# I0805 14:11:21.481334 2082779920 inner_product_layer.cpp:100] Craig checking backprop gradient set in python0x102dabc00
+# I0805 14:11:21.481341 2082779920 inner_product_layer.cpp:82] Craig checking backward inner product
+# I0805 14:11:21.483536 2082779920 inner_product_layer.cpp:100] Craig checking backprop gradient set in python0x102d51000
+
+
+def get_q_values(solver, net, state):
+    """ fprop the state through the net
+    get the output neuron with the highest activation"""
+
+    # Dummy values. Just humoring set_input_arrays for now.
+    labels = np.array([3.0], dtype=np.float32)
+
+    # [(1, 4, 84, 84)] image stack array (4, exp).
+    # Treating frames as channels.
+    net.set_input_arrays(np.array([state], dtype=np.float32), labels)
+
+    # TODO: Create Q-loss layer in C++ if this is slow.
+    solver.online_forward()
+
+    # Get top data.
+    return list(net.blobs['fc2'].data.flat)
+    # feat = net.blobs['fc2'].data[4]
+    # plt.subplot(2, 1, 1)
+    # plt.plot(feat.flat)
+    # plt.subplot(2, 1, 2)
+    # _ = plt.hist(feat.flat[feat.flat > 0], bins=100)
 
 
 def rgb2gray(rgb):

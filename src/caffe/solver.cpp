@@ -158,6 +158,7 @@ void Solver<Dtype>::OnlineForward() {
   // CQ: Split from Solve because we need to be able to set the input
   // of the memory data layer between every iteration.
 
+  LOG(INFO) << "Online forward starting";
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
   iter_++;
@@ -165,6 +166,14 @@ void Solver<Dtype>::OnlineForward() {
 
   Dtype loss;
   net_->Forward(bottom_vec, &loss);
+
+  LOG(INFO) << "Online forward ending";
+
+  // Net forward returns loss via side effect.
+  // Layer forward directly returns 0 unless a loss layer.
+  // Figure out Euclidean loss, is this a derivative?
+  // Implement a Q-loss layer.
+  // Then gradients are computed backward from the loss.
 }
 
 template <typename Dtype>
@@ -174,15 +183,15 @@ void Solver<Dtype>::OnlineUpdate() {
 
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
-  iter_++;
-  vector<Blob<Dtype>*> bottom_vec;
-  Dtype loss = net_->ForwardBackward(bottom_vec);
+//  Dtype loss = net_->ForwardBackward(bottom_vec);
+  LOG(INFO) << "Online update starting";
+  net_->Backward();
   ComputeUpdateValue();
   net_->Update();
 
-  if (param_.display() && iter_ % param_.display() == 0) {
-    LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
-  }
+//  if (param_.display() && iter_ % param_.display() == 0) {
+//    LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+//  }
   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
     TestAll();
   }
@@ -190,6 +199,7 @@ void Solver<Dtype>::OnlineUpdate() {
   if (param_.snapshot() && iter_ % param_.snapshot() == 0) {
     Snapshot();
   }
+  LOG(INFO) << "Online update finished";
 }
 
 

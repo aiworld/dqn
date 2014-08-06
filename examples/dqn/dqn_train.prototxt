@@ -127,9 +127,9 @@ layers {
   }
 }
 
-layers {
-  name: "loss"
-  type: SOFTMAX_LOSS
-  bottom: "fc2"
-  bottom: "label"
-}
+# layers {
+#   name: "loss"
+#   type: SOFTMAX_LOSS
+#   bottom: "fc2"
+#   bottom: "label"
+# }
