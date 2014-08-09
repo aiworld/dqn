@@ -8,6 +8,7 @@ from atari import Atari
 import random
 import dqn.atari_actions as actions
 import math
+from examples.dqn import atari_actions
 
 EXPERIENCE_SIZE = 4
 
@@ -42,6 +43,7 @@ def go():
         # TODO: Set skip frame appropriately (4 except for space invaders, 3).
         atari.experience(EXPERIENCE_SIZE, action)
         learn_from_experience_replay(atari, i, net, solver)
+        i += 1
         # TODO: Get next action
 
 
@@ -61,6 +63,10 @@ def get_random_q_max_index(q_values):
     random_max_index = index_values[0][0]
     return random_max_index
 
+
+def get_gamma(i):
+    return 0.8  # Using pacman assignment value.
+
 def train(solver, net, subsequent_experiences, atari, i):
     experience_one = subsequent_experiences[:EXPERIENCE_SIZE]
     experience_two = subsequent_experiences[EXPERIENCE_SIZE:]
@@ -69,20 +75,19 @@ def train(solver, net, subsequent_experiences, atari, i):
     experience_two_action = atari.get_action_from_experience(experience_two)
 
     q_values_one = get_q_values(solver, net, experience_one_state)
-    q_old = q_values_one[experience_two_action.value]
+    print 'q values one', q_values_one
+    q_old_action = q_values_one[experience_two_action.value]
+    print 'old action', q_old_action
 
     q_values_two = get_q_values(solver, net, experience_two_state)
+    print 'q_values_two', q_values_two
     q_max_index = get_random_q_max_index(q_values_two)
     q_max = q_values_two[q_max_index]
 
-    # TODO: Qnew = q learning update with reward and next_state
     reward = atari.get_reward_from_experience(experience_one)
 
-    # TODO: Set the diff to the q-gradient.
-    # net.blobs['fc2'].diff # shape is (1, 4, 1, 1), size = 4
-    net.blobs['fc2'].diff[0][0][0][0] = 0.5
-    # TODO: Make sure this diff is reflected in fc2's backward C++.
-    # Set mutable_cpu_diff of fc2 data to:
+    # NOTE: Q-learning alpha is achieved via neural net (caffe) learning rate.
+
     #   (r + gamma * maxQ(s', a') - Q(s, a)) * Q(s, a)
     #   (r + gamma * q_new - q_old) * q_old
     # i.e.
@@ -95,34 +100,77 @@ def train(solver, net, subsequent_experiences, atari, i):
     # r + gamma * q_new - q_old = [3, 4, 5, 6] - [1, 2, 1, 2] = [2, 2, 4, 4]
     # (r + gamma * q_new - q_old) * q_old = [2, 2, 4, 4] * [1, 2, 1, 2] = [2, 4, 4, 8] # Do separately for each neuron / action (not a dot product)
     # DOES NOT MAKE SENSE THAT BIGGER Q_OLD GIVES BIGGER GRADIENT CRAIG
+    q_gradients = []
+    print 'reward', reward
+    print 'q_max', q_max
+    for q_old in q_values_one:
+        q_gradient = (reward + get_gamma(i) * q_max - q_old)  # TODO: Try * q_old to follow dqn paper even though this doesn't make sense as larger q_old should not give larger gradient.
+        q_gradients.append(q_gradient)
 
+    # Set mutable_cpu_diff of fc2 data to:
+    for i in xrange(len(atari_actions.ALL)):
+        net.blobs['fc2'].diff[0][i] = np.reshape( -1.0 * q_gradients[i], (1, 1, 1))  # TODO: May need to reverse this gradient.
 
-    # for i, neuron in enumerate(neurons): # Number of actions
-    #   bottom_diff[i] = (reward + gamma * q_new
+    # TODO: Figure out why q_max is exploding to 1.735e+07
+    # TODO: Figure out if loss needs to be calculated.
+    # TODO: Set the frame skipping.
 
+    print 'before: gradient conv1', net.blobs['conv1'].diff
+    print 'before: gradient conv2', net.blobs['conv2'].diff
+    print 'before: gradient fc1',   net.blobs['fc1'  ].diff
+    print 'before: gradient fc2',   net.blobs['fc2'  ].diff
 
-    # Run Backward to update weights.
-
-    # TODO: bprop (Qold - Qnew)^2
+    plot_layers(net)
 
     solver.online_update()
 
-    print 'this should be 0.5', net.blobs['fc2'].diff[0][0][0][0]
+    print 'after: gradient conv1', net.blobs['conv1'].diff
+    print 'after: gradient conv2', net.blobs['conv2'].diff
+    print 'after: gradient fc1',   net.blobs['fc1'  ].diff
+    print 'after: gradient fc2',   net.blobs['fc2'  ].diff
+
+    plot_layers(net)
+
+    # FC2 params after one pass goes to 900 without bias_term_
+
 
     # print solver.net.params.values()[0][0].data
     # print [(k, v[0].data.shape) for k, v in solver.net.params.items()]
-    if i % 1000 == 0:
+    if True or i % 1000 == 0:
         filters = net.params['conv1'][0].data
         vis_square(filters.transpose(0, 2, 3, 1))
-    i += 1
-#
-# I0805 14:08:11.535507 2082779920 inner_product_layer.cpp:100] Craig checking backprop gradient set in python0x1155df000
-# I0805 14:08:11.535514 2082779920 inner_product_layer.cpp:82] Craig checking backward inner product
-# I0805 14:08:11.537643 2082779920 inner_product_layer.cpp:100] Craig checking backprop gradient set in python0x1176b9e00
 
-# I0805 14:11:21.481334 2082779920 inner_product_layer.cpp:100] Craig checking backprop gradient set in python0x102dabc00
-# I0805 14:11:21.481341 2082779920 inner_product_layer.cpp:82] Craig checking backward inner product
-# I0805 14:11:21.483536 2082779920 inner_product_layer.cpp:100] Craig checking backprop gradient set in python0x102d51000
+
+def plot_layers(net):
+    names = ['conv1', 'conv2', 'fc1', 'fc2']
+    metrics = ['data', 'params', 'gradients']
+    data_funcs = {
+        'data':      lambda net, name: net.blobs[name].data[0],
+        'params':    lambda net, name: net.params[name][0].data,
+        'gradients': lambda net, name: net.blobs[name].diff[0]
+    }
+    num_layers = len(names)
+    num_metrics = len(metrics)
+    f, axarr = plt.subplots(
+        num_layers * num_metrics,
+        2  # Values and histogram
+    )
+    i = 0
+    for name in names:
+        for metric in metrics:
+            feat = data_funcs[metric](net, name).flat
+            axarr[i, 0].plot(feat)
+            axarr[i, 0].set_title(name + ' ' + metric)
+
+            try:
+                axarr[i, 1].hist(feat[feat > 0], bins=100)
+            except:
+                print 'problem with histogram', name, metric
+            else:
+                axarr[i, 1].set_title(name + ' ' + metric + ' histogram')
+            i += 1
+    f.subplots_adjust(hspace=1.3)
+    plt.show()
 
 
 def get_q_values(solver, net, state):
