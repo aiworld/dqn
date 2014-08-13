@@ -1,4 +1,5 @@
 from collections import namedtuple
+import random
 Action = namedtuple('Action', [  'value' , 'up'   , 'down' , 'right' , 'left'  , 'fire'])
 NOOP                     = Action ( 0    ,  False , False  ,  False  , False   , False )
 FIRE                     = Action ( 1    ,  False , False  ,  False  , False   , True  )
@@ -24,3 +25,7 @@ ALL = dict([(k, v) for k, v in _props.iteritems() if type(v) is Action])
 
 if __name__ == '__main__':
     print ALL
+
+
+def get_random_action():
+    return ALL.values()[random.randint(0, len(ALL.values()) - 1)]

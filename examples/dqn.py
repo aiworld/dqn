@@ -3,14 +3,19 @@ import matplotlib.pyplot as plt
 import caffe
 import skimage.io
 import skimage.transform
+import time
+from datetime import datetime
 import sys
 from atari import Atari
 import random
 import dqn.atari_actions as actions
 import math
 from examples.dqn import atari_actions
+import os.path
 
 EXPERIENCE_SIZE = 4
+EPSILON_ANNEALING_TIME = 1E6
+EPSILON_ANNEALING_START = int(round(0.1 * EPSILON_ANNEALING_TIME))
 
 
 def setup_matplotlib():
@@ -28,23 +33,77 @@ def get_solver():
     return solver
 
 
-def get_q_and_best_action(atari, net, experience_window):
-    return q, best_action
-
-
 def go():
     setup_matplotlib()
     solver = get_solver()
     net = solver.net
-    atari = Atari(show=False)
+    atari = Atari()
     i = 0
     action = actions.MOVE_RIGHT
     while True:
         # TODO: Set skip frame appropriately (4 except for space invaders, 3).
-        atari.experience(EXPERIENCE_SIZE, action)
+        experience = atari.experience(EXPERIENCE_SIZE, action)
+        action = perceive(atari, solver, net, experience)
+        if should_explore(i):
+            action = atari_actions.get_random_action()
         learn_from_experience_replay(atari, i, net, solver)
         i += 1
-        # TODO: Get next action
+        if atari.game_over:
+            atari.stop()
+            atari = Atari()
+
+
+def train(solver, net, subsequent_experiences, atari, i):
+    q_max, q_values, reward = \
+        get_update_variables(atari, net, solver, subsequent_experiences)
+
+    set_gradients(i, net, q_max, q_values, reward)
+
+    # TODO: Figure out if loss (not just gradient) needs to be calculated.
+    # TODO: Set the frame skipping.
+
+    # plot_layers(net)
+
+    if i > 50:
+        # Get some experience
+        solver.online_update()
+
+    if i % 100 == 0:
+        log_q_max(q_max)
+
+    if os.path.isfile('show_graphs'):
+        filters = net.params['conv1'][0].data
+        vis_square(filters.transpose(0, 2, 3, 1))
+        plot_layers(net)
+
+
+def should_explore(i):
+    if exploit(i):
+        print 'exploiting'
+        return False
+    elif (EPSILON_ANNEALING_START + i) >= EPSILON_ANNEALING_TIME:
+        # Annealing has ended
+        print 'permanently exploring'
+        return True
+    else:
+        start = EPSILON_ANNEALING_START + i
+        ret = random.randint(0, EPSILON_ANNEALING_TIME) > start
+        print 'exploring' if ret else 'exploiting'
+        return ret
+
+
+should_exploit = False
+
+
+def exploit(i):
+    return i % 100 == 0 and os.path.isfile('exploit')
+
+
+def perceive(atari, solver, net, experience):
+    state = atari.get_state_from_experience(experience)
+    q_values = get_q_values(solver, net, state)
+    action_index = get_random_q_max_index(q_values)
+    return atari_actions.ALL.values()[action_index]
 
 
 def learn_from_experience_replay(atari, i, net, solver):
@@ -67,27 +126,35 @@ def get_random_q_max_index(q_values):
 def get_gamma(i):
     return 0.8  # Using pacman assignment value.
 
-def train(solver, net, subsequent_experiences, atari, i):
+
+def set_loss(net, q_gradients):
+    # Set mutable_cpu_diff of fc2 data to:
+    for i in xrange(len(atari_actions.ALL)):
+        # TODO: May need to reverse this gradient.
+        net.blobs['fc2'].diff[0][i] = \
+            np.reshape(q_gradients[i], (1, 1, 1))
+
+
+def get_update_variables(atari, net, solver, subsequent_experiences):
     experience_one = subsequent_experiences[:EXPERIENCE_SIZE]
     experience_two = subsequent_experiences[EXPERIENCE_SIZE:]
-    experience_one_state  = atari.get_state_from_experience (experience_one)
-    experience_two_state  = atari.get_state_from_experience (experience_two)
+    experience_one_state = atari.get_state_from_experience(experience_one)
+    experience_two_state = atari.get_state_from_experience(experience_two)
     experience_two_action = atari.get_action_from_experience(experience_two)
-
     q_values_one = get_q_values(solver, net, experience_one_state)
     print 'q values one', q_values_one
     q_old_action = q_values_one[experience_two_action.value]
     print 'old action', q_old_action
-
     q_values_two = get_q_values(solver, net, experience_two_state)
     print 'q_values_two', q_values_two
     q_max_index = get_random_q_max_index(q_values_two)
     q_max = q_values_two[q_max_index]
-
     reward = atari.get_reward_from_experience(experience_one)
+    return q_max, q_values_one, reward
 
+
+def set_gradients(i, net, q_max, q_values, reward):
     # NOTE: Q-learning alpha is achieved via neural net (caffe) learning rate.
-
     #   (r + gamma * maxQ(s', a') - Q(s, a)) * Q(s, a)
     #   (r + gamma * q_new - q_old) * q_old
     # i.e.
@@ -103,42 +170,10 @@ def train(solver, net, subsequent_experiences, atari, i):
     q_gradients = []
     print 'reward', reward
     print 'q_max', q_max
-    for q_old in q_values_one:
-        q_gradient = (reward + get_gamma(i) * q_max - q_old)  # TODO: Try * q_old to follow dqn paper even though this doesn't make sense as larger q_old should not give larger gradient.
+    for q_old in q_values:
+        q_gradient = -(reward + get_gamma(i) * q_max - q_old)  # TODO: Try * q_old to follow dqn paper even though this doesn't make sense as larger q_old should not give larger gradient.
         q_gradients.append(q_gradient)
-
-    # Set mutable_cpu_diff of fc2 data to:
-    for i in xrange(len(atari_actions.ALL)):
-        net.blobs['fc2'].diff[0][i] = np.reshape( -1.0 * q_gradients[i], (1, 1, 1))  # TODO: May need to reverse this gradient.
-
-    # TODO: Figure out why q_max is exploding to 1.735e+07
-    # TODO: Figure out if loss needs to be calculated.
-    # TODO: Set the frame skipping.
-
-    print 'before: gradient conv1', net.blobs['conv1'].diff
-    print 'before: gradient conv2', net.blobs['conv2'].diff
-    print 'before: gradient fc1',   net.blobs['fc1'  ].diff
-    print 'before: gradient fc2',   net.blobs['fc2'  ].diff
-
-    plot_layers(net)
-
-    solver.online_update()
-
-    print 'after: gradient conv1', net.blobs['conv1'].diff
-    print 'after: gradient conv2', net.blobs['conv2'].diff
-    print 'after: gradient fc1',   net.blobs['fc1'  ].diff
-    print 'after: gradient fc2',   net.blobs['fc2'  ].diff
-
-    plot_layers(net)
-
-    # FC2 params after one pass goes to 900 without bias_term_
-
-
-    # print solver.net.params.values()[0][0].data
-    # print [(k, v[0].data.shape) for k, v in solver.net.params.items()]
-    if True or i % 1000 == 0:
-        filters = net.params['conv1'][0].data
-        vis_square(filters.transpose(0, 2, 3, 1))
+    set_loss(net, q_gradients)
 
 
 def plot_layers(net):
@@ -238,6 +273,15 @@ def load_stacked_frames_from_disk(filename):
     ret = np.array([im, im, im, im], dtype=np.float32)  # Treat frames as channels.
 
     return ret
+
+
+log_file_name = 'q_max_log_' + str(int(time.time())) + '.csv'
+
+
+def log_q_max(q_max):
+    with open(log_file_name, 'a') as log:
+        log.write('{0}, {1}\n'.format(str(datetime.utcnow()), str(q_max)))
+
 
 if __name__ == '__main__':
     go()

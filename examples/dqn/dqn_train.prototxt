@@ -104,6 +104,8 @@ layers {
   }
 }
 
+# TODO: Do we need a non-linearity activation layer here?
+
 # The output layer is a fully- connected linear layer with a single output for each valid action.
 layers {
   name: "fc2"
@@ -126,6 +128,8 @@ layers {
     }
   }
 }
+
+# TODO: Do we need a non-linearity activation layer here?
 
 # layers {
 #   name: "loss"

@@ -92,44 +92,44 @@ void InnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       this->blobs_[0]->mutable_cpu_diff() // C
   );
 
-  LOG(INFO) << "top_diff" << *top_diff;
-  LOG(INFO) << "top_diff 1 " << top_diff[1];
-  LOG(INFO) << "top_diff type" << typeid(top_diff).name();
-  LOG(INFO) << "top_diff type" << typeid(*top_diff).name();
-  LOG(INFO) << "N_ " << N_;
-  LOG(INFO) << "K_ " << K_;
-  LOG(INFO) << "M_ " << M_;
+//  LOG(INFO) << "top_diff" << *top_diff;
+//  LOG(INFO) << "top_diff 1 " << top_diff[1];
+//  LOG(INFO) << "top_diff type" << typeid(top_diff).name();
+//  LOG(INFO) << "top_diff type" << typeid(*top_diff).name();
+//  LOG(INFO) << "N_ " << N_;
+//  LOG(INFO) << "K_ " << K_;
+//  LOG(INFO) << "M_ " << M_;
+//
+//  for (int i = 0; i < K_; i++) {
+//    LOG(INFO) << top_diff[i];
+//  }
+//
+//  LOG(INFO) << "bottom data"   << *bottom_data;
 
-  for (int i = 0; i < K_; i++) {
-    LOG(INFO) << top_diff[i];
+  if (bias_term_) {
+    LOG(INFO) << "Inner product bias_term_ block";
+    // Gradient with respect to bias
+    caffe_cpu_gemv<Dtype>(CblasTrans, M_, N_, (Dtype)1., top_diff,
+        reinterpret_cast<const Dtype*>(bias_multiplier_->cpu_data()), (Dtype)0.,
+        this->blobs_[1]->mutable_cpu_diff());
   }
-
-  LOG(INFO) << "bottom data"   << *bottom_data;
-
-//  if (bias_term_) {
-//    LOG(INFO) << "Inner product bias_term_ block";
-//    // Gradient with respect to bias
-//    caffe_cpu_gemv<Dtype>(CblasTrans, M_, N_, (Dtype)1., top_diff,
-//        reinterpret_cast<const Dtype*>(bias_multiplier_->cpu_data()), (Dtype)0.,
-//        this->blobs_[1]->mutable_cpu_diff());
-//  }
-//  if (propagate_down) {
-//    LOG(INFO) << "Inner product propogate_down block";
-//    // Gradient with respect to bottom data
-//    caffe_cpu_gemm<Dtype>(
-//      CblasNoTrans,
-//      CblasNoTrans,
-//      M_,
-//      K_,
-//      N_,
-//      (Dtype)1.,                       // alpha
-//      top_diff,                        // A
-//      this->blobs_[0]->cpu_data(),     // B
-//      (Dtype)0.,                       // beta
-//      (*bottom)[0]->mutable_cpu_diff() // C
-//    );
-//    // C = A * B
-//  }
+  if (propagate_down) {
+    LOG(INFO) << "Inner product propogate_down block";
+    // Gradient with respect to bottom data
+    caffe_cpu_gemm<Dtype>(
+      CblasNoTrans,
+      CblasNoTrans,
+      M_,
+      K_,
+      N_,
+      (Dtype)1.,                       // alpha
+      top_diff,                        // A
+      this->blobs_[0]->cpu_data(),     // B
+      (Dtype)0.,                       // beta
+      (*bottom)[0]->mutable_cpu_diff() // C
+    );
+    // C = A * B
+  }
 }
 
 INSTANTIATE_CLASS(InnerProductLayer);
