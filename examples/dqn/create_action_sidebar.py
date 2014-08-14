@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from examples.dqn import atari_actions
+import atari_actions
 
 
 rng = np.random.RandomState(23455)
