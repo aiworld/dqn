@@ -15,7 +15,8 @@ class Atari(object):
     MAX_HISTORY_LENGTH = 1000000
 
     def __init__(self, show=False):
-        # self.process = self.launch()
+        self.process = self.launch()
+        self.game_over = False
         self.fin  = open('/s/ale_0.4.4/ale_0_4/ale_fifo_out', 'w+')
         self.fout = open('/s/ale_0.4.4/ale_0_4/ale_fifo_in',  'w+')
         self.i = 0
@@ -26,6 +27,11 @@ class Atari(object):
         self.write('1,0,0,1\n')  # Ask to send (Screen, RAM, n/a, Episode)
         self.experience_history = deque(maxlen=self.MAX_HISTORY_LENGTH)
         self.action_images = ActionSidebarImages()
+
+    def stop(self):
+        self.fin.close()
+        self.fout.close()
+        self.process.kill()
 
     def read_width_height(self):
         str_in = self.read()
@@ -78,7 +84,7 @@ class Atari(object):
         screen_hex, episode, _ = self.read().split(':')
         image = self.get_image_from_screen_hex(screen_hex)
         image_action = self.add_action_sidebar(image, action)
-        death, reward = self.get_death_and_reward(episode)
+        death, reward = self.get_game_over_and_reward(episode)
         experience = (image_action, action, death, reward)
         self.experience_history.append(experience)
         self.send_action(action)
@@ -87,7 +93,12 @@ class Atari(object):
     def get_reward_from_experience(self, experience):
         """Returns sum of rewards
         """
-        return sum([e[3] for e in experience])
+        total_reward = sum([e[3] for e in experience])
+        if any([e[2] for e in experience]):
+            # Death is -100
+            total_reward = -100
+
+        return total_reward
 
     def get_state_from_experience(self, experience):
         return [e[0] for e in experience]
@@ -95,16 +106,16 @@ class Atari(object):
     def get_action_from_experience(self, experience):
         return experience[0][1]
 
-    @staticmethod
-    def get_death_and_reward(episode):
+    def get_game_over_and_reward(self, episode):
         # From ALE manual.pdf:
         # The episode string contains two comma-separated integers
         # indicating episode termination (1 for termination, 0 otherwise)
         # and the most recent reward. It is also colon-terminated.
-        death, reward = episode.split(',')
-        death = True if death == '1' else False
+        game_over, reward = episode.split(',')
+        game_over = True if game_over == '1' else False
         reward = int(reward)
-        return death, reward
+        self.game_over = game_over
+        return game_over, reward
 
     def get_image_from_screen_hex(self, screen_hex):
         """ Returns w x h x gray_level """
@@ -122,20 +133,21 @@ class Atari(object):
             print datetime.now(), 'ten frames'
         return im
 
-    @staticmethod
-    def launch():
+    def launch(self):
         ale_location = "/s/ale_0.4.4/ale_0_4/"
-        rom_location = "/s/ale_0.4.4/ale_0_4/roms/"
+        rom_location = "roms/"
         ale_bin_file = "ale"
         rom_file = 'space_invaders.bin'
         # Run A.L.E
         args = [
             ale_location + ale_bin_file,
-            '-run_length_encoding', 'false',
-            '-game_controller', 'fifo_named',
+            '-run_length_encoding',      'false',
+            '-display_screen',           'true',
+            '-game_controller',          'fifo_named',
             rom_location + rom_file
         ]
-        return Popen(args)
+        return Popen(args, cwd='/s/ale_0.4.4/ale_0_4/', close_fds=True)
+
 
     def add_action_sidebar(self, image, action):
         action_image = self.action_images.images[action.value]
