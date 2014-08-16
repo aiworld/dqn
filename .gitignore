@@ -58,3 +58,8 @@ _site
 *.sublime-workspace
 *.sublime-project
 
+# jetbrains proj files
+.idea/*
+*.iml
+*.iws
+

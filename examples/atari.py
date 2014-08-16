@@ -1,6 +1,7 @@
 from datetime import datetime
 import random
 import itertools
+import os.path
 from ntsc_palette import NTSCPalette
 import numpy as np
 import caffe
@@ -10,18 +11,16 @@ from collections import namedtuple, deque
 from dqn.create_action_sidebar import ActionSidebarImages
 import Image
 
-
 class Atari(object):
     MAX_HISTORY_LENGTH = 1000000
 
-    def __init__(self, show=False):
+    def __init__(self):
         self.process = self.launch()
         self.game_over = False
         self.fin  = open('/s/ale_0.4.4/ale_0_4/ale_fifo_out', 'w+')
         self.fout = open('/s/ale_0.4.4/ale_0_4/ale_fifo_in',  'w+')
         self.i = 0
         self.palette = NTSCPalette()
-        self.show = show
         # Handshake
         self.width, self.height = self.read_width_height()
         self.write('1,0,0,1\n')  # Ask to send (Screen, RAM, n/a, Episode)
@@ -54,7 +53,7 @@ class Atari(object):
         plt.show()
 
     def show_checkpoint_image(self, im):
-        if self.i % 1000 == 0:
+        if self.i % 100 == 0 and os.path.isfile('show_screen'):
             self.show_image(im)
 
     def send_action(self, action):
@@ -78,14 +77,14 @@ class Atari(object):
 
     def experience_frame(self, action):
         """ Load frame from game video.
-        Returns: (image, action, death, reward)
+        Returns: (image, action, game_over, reward)
         """
         # screen_hex = width x height x 2-Hex-NTSC-color
         screen_hex, episode, _ = self.read().split(':')
         image = self.get_image_from_screen_hex(screen_hex)
         image_action = self.add_action_sidebar(image, action)
-        death, reward = self.get_game_over_and_reward(episode)
-        experience = (image_action, action, death, reward)
+        game_over, reward = self.get_game_over_and_reward(episode)
+        experience = (image_action, action, game_over, reward)
         self.experience_history.append(experience)
         self.send_action(action)
         return experience
@@ -95,8 +94,15 @@ class Atari(object):
         """
         total_reward = sum([e[3] for e in experience])
         if any([e[2] for e in experience]):
-            # Death is -100
-            total_reward = -100
+            # Game over is -100
+            print '\n\n\n\n NEGATIVE REWARD FINALLY \n\n\n\n'
+            print '\n\n\n\n NEGATIVE REWARD FINALLY \n\n\n\n'
+            total_reward = -1
+
+        if total_reward > 0:
+            total_reward = 1
+        elif total_reward < 0:
+            total_reward = -1
 
         return total_reward
 
@@ -127,7 +133,7 @@ class Atari(object):
         im = rgb2gray(im)
         # Resize to dimensions in DQN paper, TODO: pass dims as param.
         im = caffe.io.resize_image(im, (84, 80))
-        self.show_checkpoint_image(im) if self.show else None
+        self.show_checkpoint_image(im)
         self.i += 1
         if self.i % 10 == 0:
             print datetime.now(), 'ten frames'
@@ -144,6 +150,7 @@ class Atari(object):
             '-run_length_encoding',      'false',
             '-display_screen',           'true',
             '-game_controller',          'fifo_named',
+            '-frame_skip',               '3',  # TODO: Change to 4 for other games per dqn paper.
             rom_location + rom_file
         ]
         return Popen(args, cwd='/s/ale_0.4.4/ale_0_4/', close_fds=True)

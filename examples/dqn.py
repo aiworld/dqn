@@ -96,7 +96,10 @@ should_exploit = False
 
 
 def exploit(i):
-    return i % 100 == 0 and os.path.isfile('exploit')
+    global should_exploit
+    if i % 100 == 0:
+        should_exploit = os.path.isfile('exploit')
+    return should_exploit
 
 
 def perceive(atari, solver, net, experience):
