@@ -12,13 +12,21 @@ import dqn.atari_actions as actions
 import math
 from dqn import atari_actions
 import os.path
+import pandas as pd
+from dqn.episode_stats import EpisodeStats
 
-EXPERIENCE_SIZE = 4
+EXPERIENCE_WINDOW_SIZE = 4
+
+# Epsilon annealed linearly from 1 to 0.1 over the first million frames,
+# and fixed at 0.1 thereafter
+EPSILON_START = 1.0
 EPSILON_ANNEALING_TIME = 1E6
-EPSILON_ANNEALING_START = int(round(0.1 * EPSILON_ANNEALING_TIME))
+EPSILON_END = 0.1
+EPSILON_SLOPE = -(1.0 - EPSILON_END) / EPSILON_ANNEALING_TIME
 
 
 def setup_matplotlib():
+    # pd.options.display.mpl_style = 'default'
     plt.rcParams['figure.figsize'] = (10, 10)
     plt.rcParams['image.interpolation'] = 'nearest'
     plt.rcParams['image.cmap'] = 'gray'
@@ -39,37 +47,42 @@ def go():
     net = solver.net
     atari = Atari()
     i = 0
+    episode_count = 0
     action = actions.MOVE_RIGHT
+    episode_stats = EpisodeStats()
     while True:
-        # TODO: Set skip frame appropriately (4 except for space invaders, 3).
-        experience = atari.experience(EXPERIENCE_SIZE, action)
-        action = perceive(atari, solver, net, experience)
-        if should_explore(i):
+        experience = atari.experience(EXPERIENCE_WINDOW_SIZE, action)
+        q, action = perceive(atari, solver, net, experience)
+        exploit = should_exploit(i)
+        if not exploit:
             action = atari_actions.get_random_action()
+        record_episode_stats(episode_stats, atari, experience, q, action, exploit)
         learn_from_experience_replay(atari, i, net, solver)
         i += 1
         if atari.game_over:
+            log_csv(episode_count, episode_stats)
+            episode_count += 1
+            episode_stats = EpisodeStats()
             atari.stop()
             atari = Atari()
 
 
-def train(solver, net, subsequent_experiences, atari, i):
-    q_max, q_values, reward = \
-        get_update_variables(atari, net, solver, subsequent_experiences)
+def learn_from_experience_replay(atari, i, net, solver):
+    experience_pair = atari.get_random_experience_pair()
+    if experience_pair:
+        train(solver, net, experience_pair, atari, i)
 
-    set_gradients(i, net, q_max, q_values, reward)
+
+def train(solver, net, experience_pair, atari, i):
+    q_max, q_values, action_index, reward = \
+        get_update_variables(atari, net, solver, experience_pair)
+
+    set_gradients(i, net, q_max, q_values, action_index, reward)
 
     # TODO: Figure out if loss (not just gradient) needs to be calculated.
-    # TODO: Set the frame skipping.
-
     # plot_layers(net)
 
-    if i > 50:
-        # Get some experience
-        solver.online_update()
-
-    if i % 100 == 0:
-        log_q_max(q_max)
+    solver.online_update()
 
     if os.path.isfile('show_graphs'):
         filters = net.params['conv1'][0].data
@@ -77,42 +90,39 @@ def train(solver, net, subsequent_experiences, atari, i):
         plot_layers(net)
 
 
-def should_explore(i):
-    if exploit(i):
-        print 'exploiting'
-        return False
-    elif (EPSILON_ANNEALING_START + i) >= EPSILON_ANNEALING_TIME:
-        # Annealing has ended
-        print 'permanently exploring'
-        return True
+def should_exploit(i):
+    if forced_exploit(i):
+        print 'forced exploiting'
+        ret = True
+    elif i < EPSILON_ANNEALING_TIME:
+        ret = random.random() > (float(i) * EPSILON_SLOPE + EPSILON_START)  # 1 to 0.1
+        print 'exploiting' if ret else 'exploring'
     else:
-        start = EPSILON_ANNEALING_START + i
-        ret = random.randint(0, EPSILON_ANNEALING_TIME) > start
-        print 'exploring' if ret else 'exploiting'
-        return ret
+        ret = random.random() > EPSILON_END
+    return ret
 
 
-should_exploit = False
+_forced_exploit = False
 
 
-def exploit(i):
-    global should_exploit
+def forced_exploit(i):
+    """Allows manually triggering exploit"""
+    global _forced_exploit
     if i % 100 == 0:
-        should_exploit = os.path.isfile('exploit')
-    return should_exploit
+        _forced_exploit = os.path.isfile('exploit')
+    return _forced_exploit
 
 
 def perceive(atari, solver, net, experience):
     state = atari.get_state_from_experience(experience)
     q_values = get_q_values(solver, net, state)
     action_index = get_random_q_max_index(q_values)
-    return atari_actions.ALL.values()[action_index]
+    return q_values[action_index], atari_actions.ALL.values()[action_index]
 
 
-def learn_from_experience_replay(atari, i, net, solver):
-    subsequent_experiences = atari.get_random_experience(EXPERIENCE_SIZE * 2)
-    if subsequent_experiences:
-        train(solver, net, subsequent_experiences, atari, i)
+def record_episode_stats(episode_stats, atari, experience, q, action, exploit):
+    reward = atari.get_reward_from_experience(experience)
+    episode_stats.add(q, reward, exploit, action)
 
 
 def get_random_q_max_index(q_values):
@@ -138,9 +148,10 @@ def set_loss(net, q_gradients):
             np.reshape(q_gradients[i], (1, 1, 1))
 
 
-def get_update_variables(atari, net, solver, subsequent_experiences):
-    experience_one = subsequent_experiences[:EXPERIENCE_SIZE]
-    experience_two = subsequent_experiences[EXPERIENCE_SIZE:]
+def get_update_variables(atari, net, solver, experience_pair):
+    # TODO: Take out actions that don't matter for Space Invaders (up, down)
+    experience_one = experience_pair[0]
+    experience_two = experience_pair[1]
     experience_one_state = atari.get_state_from_experience(experience_one)
     experience_two_state = atari.get_state_from_experience(experience_two)
     experience_two_action = atari.get_action_from_experience(experience_two)
@@ -152,11 +163,11 @@ def get_update_variables(atari, net, solver, subsequent_experiences):
     print 'q_values_two', q_values_two
     q_max_index = get_random_q_max_index(q_values_two)
     q_max = q_values_two[q_max_index]
-    reward = atari.get_reward_from_experience(experience_one)
-    return q_max, q_values_one, reward
+    reward = atari.get_reward_from_experience(experience_two)
+    return q_max, q_values_one, experience_two_action.value, reward
 
 
-def set_gradients(i, net, q_max, q_values, reward):
+def set_gradients(i, net, q_max, q_values, action_index, reward):
     # NOTE: Q-learning alpha is achieved via neural net (caffe) learning rate.
     #   (r + gamma * maxQ(s', a') - Q(s, a)) * Q(s, a)
     #   (r + gamma * q_new - q_old) * q_old
@@ -170,12 +181,12 @@ def set_gradients(i, net, q_max, q_values, reward):
     # r + gamma * q_new - q_old = [3, 4, 5, 6] - [1, 2, 1, 2] = [2, 2, 4, 4]
     # (r + gamma * q_new - q_old) * q_old = [2, 2, 4, 4] * [1, 2, 1, 2] = [2, 4, 4, 8] # Do separately for each neuron / action (not a dot product)
     # DOES NOT MAKE SENSE THAT BIGGER Q_OLD GIVES BIGGER GRADIENT CRAIG
-    q_gradients = []
+    # TODO: Try setting other actions to opposite gradient.
+    q_gradients = [0.0] * len(q_values)
+    q_old = q_values[action_index]
+    q_gradients[action_index] = -(reward + get_gamma(i) * q_max - q_old)  # TODO: Try * q_old to follow dqn paper even though this doesn't make sense as larger q_old should not give larger gradient.
     print 'reward', reward
     print 'q_max', q_max
-    for q_old in q_values:
-        q_gradient = -(reward + get_gamma(i) * q_max - q_old)  # TODO: Try * q_old to follow dqn paper even though this doesn't make sense as larger q_old should not give larger gradient.
-        q_gradients.append(q_gradient)
     set_loss(net, q_gradients)
 
 
@@ -278,13 +289,17 @@ def load_stacked_frames_from_disk(filename):
     return ret
 
 
-log_file_name = 'q_max_log_' + str(int(time.time())) + '.csv'
+log_file_name = 'episode_log_' + str(int(time.time())) + '.csv'
 
 
-def log_q_max(q_max):
+def log_csv(episode_count, episode_stats):
+    aggregates = episode_stats.aggregates()
     with open(log_file_name, 'a') as log:
-        log.write('{0}, {1}\n'.format(str(datetime.utcnow()), str(q_max)))
-
+        if episode_count == 0:
+            # Write headers
+            log.write(','.join(['time'] + aggregates.keys()) + '\n')
+        cols = [datetime.utcnow()] + aggregates.values()
+        log.write(','.join([str(c) for c in cols]) + '\n')
 
 if __name__ == '__main__':
     go()
