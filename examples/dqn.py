@@ -24,6 +24,9 @@ EPSILON_ANNEALING_TIME = 1E6
 EPSILON_END = 0.1
 EPSILON_SLOPE = -(1.0 - EPSILON_END) / EPSILON_ANNEALING_TIME
 
+GAMMA = 0.8  # Using pac-man value.
+
+MINIBATCH_SIZE = 32
 
 def setup_matplotlib():
     # pd.options.display.mpl_style = 'default'
@@ -46,11 +49,10 @@ def go():
     solver = get_solver()
     net = solver.net
     atari = Atari()
-    i = 0
     episode_count = 0
     action = actions.MOVE_RIGHT
     episode_stats = EpisodeStats()
-    while True:
+    for i in xrange(int(1E7)):  # 10 million training steps
         experience = atari.experience(EXPERIENCE_WINDOW_SIZE, action)
         q, action = perceive(atari, solver, net, experience)
         exploit = should_exploit(i)
@@ -58,7 +60,6 @@ def go():
             action = atari_actions.get_random_action()
         record_episode_stats(episode_stats, atari, experience, q, action, exploit)
         learn_from_experience_replay(atari, i, net, solver)
-        i += 1
         if atari.game_over:
             log_csv(episode_count, episode_stats)
             episode_count += 1
@@ -68,26 +69,33 @@ def go():
 
 
 def learn_from_experience_replay(atari, i, net, solver):
-    experience_pair = atari.get_random_experience_pair()
-    if experience_pair:
-        train(solver, net, experience_pair, atari, i)
+    transition_minibatch = \
+        atari.get_random_transitions(num=MINIBATCH_SIZE)
+    q_gradients = [0.0] * len(atari_actions.ALL)
+    for transition in transition_minibatch:
+        q_max, q_values, action_index, reward = \
+            get_update_variables(atari, net, solver, transition)
+        for j, q in enumerate(q_values):
+            assert(q < 1)
+            q_gradients[j] += (reward + GAMMA * q_max - q) * q
 
-
-def train(solver, net, experience_pair, atari, i):
-    q_max, q_values, action_index, reward = \
-        get_update_variables(atari, net, solver, experience_pair)
-
-    set_gradients(i, net, q_max, q_values, action_index, reward)
-
-    # TODO: Figure out if loss (not just gradient) needs to be calculated.
-    # plot_layers(net)
-
-    solver.online_update()
+    if transition_minibatch:
+        q_gradients = 1.0 / float(MINIBATCH_SIZE) * np.array(q_gradients)  # avg
+        # TODO: Figure out if loss (not just gradient) needs to be calculated.
+        set_gradients_on_caffe_net(net, q_gradients)
+        solver.online_update()
 
     if os.path.isfile('show_graphs'):
         filters = net.params['conv1'][0].data
         vis_square(filters.transpose(0, 2, 3, 1))
         plot_layers(net)
+
+
+def set_gradients_on_caffe_net(net, q_gradients):
+    # Set mutable_cpu_diff of fc2 data to:
+    for i in xrange(len(atari_actions.ALL)):
+        # TODO: May need to reverse this gradient.
+        net.blobs['fc2'].diff[0][i] = np.reshape(q_gradients[i], (1, 1, 1))
 
 
 def should_exploit(i):
@@ -136,18 +144,6 @@ def get_random_q_max_index(q_values):
     return random_max_index
 
 
-def get_gamma(i):
-    return 0.8  # Using pacman assignment value.
-
-
-def set_loss(net, q_gradients):
-    # Set mutable_cpu_diff of fc2 data to:
-    for i in xrange(len(atari_actions.ALL)):
-        # TODO: May need to reverse this gradient.
-        net.blobs['fc2'].diff[0][i] = \
-            np.reshape(q_gradients[i], (1, 1, 1))
-
-
 def get_update_variables(atari, net, solver, experience_pair):
     # TODO: Take out actions that don't matter for Space Invaders (up, down)
     experience_one = experience_pair[0]
@@ -165,29 +161,6 @@ def get_update_variables(atari, net, solver, experience_pair):
     q_max = q_values_two[q_max_index]
     reward = atari.get_reward_from_experience(experience_two)
     return q_max, q_values_one, experience_two_action.value, reward
-
-
-def set_gradients(i, net, q_max, q_values, action_index, reward):
-    # NOTE: Q-learning alpha is achieved via neural net (caffe) learning rate.
-    #   (r + gamma * maxQ(s', a') - Q(s, a)) * Q(s, a)
-    #   (r + gamma * q_new - q_old) * q_old
-    # i.e.
-    # q_new = [2, 4, 6, 8]
-    # q_old = [1, 2, 1, 2]
-    # gamma = 0.5
-    # reward = reward[random_state_index] = 2
-    # gamma * q_new = [1, 2, 3, 4]
-    # r + gamma * q_new = [3, 4, 5, 6] # Do this first because it's new value in essence
-    # r + gamma * q_new - q_old = [3, 4, 5, 6] - [1, 2, 1, 2] = [2, 2, 4, 4]
-    # (r + gamma * q_new - q_old) * q_old = [2, 2, 4, 4] * [1, 2, 1, 2] = [2, 4, 4, 8] # Do separately for each neuron / action (not a dot product)
-    # DOES NOT MAKE SENSE THAT BIGGER Q_OLD GIVES BIGGER GRADIENT CRAIG
-    # TODO: Try setting other actions to opposite gradient.
-    q_gradients = [0.0] * len(q_values)
-    q_old = q_values[action_index]
-    q_gradients[action_index] = -(reward + get_gamma(i) * q_max - q_old)  # TODO: Try * q_old to follow dqn paper even though this doesn't make sense as larger q_old should not give larger gradient.
-    print 'reward', reward
-    print 'q_max', q_max
-    set_loss(net, q_gradients)
 
 
 def plot_layers(net):
@@ -301,5 +274,31 @@ def log_csv(episode_count, episode_stats):
         cols = [datetime.utcnow()] + aggregates.values()
         log.write(','.join([str(c) for c in cols]) + '\n')
 
+
+
+# def set_gradients(i, net, q_max, q_values, action_index, reward):
+#     # NOTE: Q-learning alpha is achieved via neural net (caffe) learning rate.
+#     #   (r + gamma * maxQ(s', a') - Q(s, a)) * Q(s, a)
+#     #   (r + gamma * q_new - q_old) * q_old
+#     # i.e.
+#     # q_new = [2, 4, 6, 8]
+#     # q_old = [1, 2, 1, 2]
+#     # gamma = 0.5
+#     # reward = reward[random_state_index] = 2
+#     # gamma * q_new = [1, 2, 3, 4]
+#     # r + gamma * q_new = [3, 4, 5, 6] # Do this first because it's new value in essence
+#     # r + gamma * q_new - q_old = [3, 4, 5, 6] - [1, 2, 1, 2] = [2, 2, 4, 4]
+#     # (r + gamma * q_new - q_old) * q_old = [2, 2, 4, 4] * [1, 2, 1, 2] = [2, 4, 4, 8] # Do separately for each neuron / action (not a dot product)
+#     # DOES NOT MAKE SENSE THAT BIGGER Q_OLD GIVES BIGGER GRADIENT CRAIG
+#     # TODO: Try setting other actions to opposite gradient.
+#     q_gradients = [0.0] * len(q_values)
+#     q_old = q_values[action_index]
+#     q_gradients[action_index] = -(reward + GAMMA * q_max - q_old)  # TODO: Try * q_old to follow dqn paper even though this doesn't make sense as larger q_old should not give larger gradient.
+#     print 'reward', reward
+#     print 'q_max', q_max
+#     set_gradients_on_caffe_net(net, q_gradients)
+
+
 if __name__ == '__main__':
     go()
+
