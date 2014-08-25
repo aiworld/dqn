@@ -119,8 +119,8 @@ layers {
   inner_product_param {
     num_output: 18 # Number of actions
     weight_filler {
-      type: "constant"
-      value: 0
+      type: "gaussian"
+      std: 0.01
     }
     bias_filler {
       type: "constant"
