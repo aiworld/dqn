@@ -78,13 +78,19 @@ class DqnSolver(object):
 
     def get_layer_state(self):
         ret = []
-        for name in LAYER_NAMES:
-            ret.append(np.copy(self.net.params[name][0].data.flat))
+        for layer_name in LAYER_NAMES:
+            ret.append((layer_name, np.copy(self.net.params[layer_name][0].data.flat)))
         return ret
 
     def print_layer_distances(self, layers_orig, layers_after):
+        ret = []
         for i in xrange(len(layers_orig)):
-            print distance.euclidean(layers_orig[i], layers_after[i])
+            dist = distance.euclidean(layers_orig[i][1],
+                                      layers_after[i][1])
+            layer_name = layers_orig[i][0]
+            print layer_name, 'distance: ', dist
+            ret.append((layer_name, dist))
+        return ret
 
     def set_gradients_on_caffe_net(self, q_gradients):
         # Set mutable_cpu_diff of fc2 data to:
