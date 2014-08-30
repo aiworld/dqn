@@ -162,6 +162,8 @@ void Solver<Dtype>::OnlineForward() {
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
   iter_++;
+
+  LOG(INFO) << "Online forward iter is " << iter_;
   vector<Blob<Dtype>*> bottom_vec; // CQ: shared ptr?
 
   Dtype loss;
@@ -305,6 +307,7 @@ template <typename Dtype>
 Dtype SGDSolver<Dtype>::GetLearningRate() {
   Dtype rate;
   const string& lr_policy = this->param_.lr_policy();
+  LOG(INFO) << "learning rate policy: " << lr_policy;
   if (lr_policy == "fixed") {
     rate = this->param_.base_lr();
   } else if (lr_policy == "step") {

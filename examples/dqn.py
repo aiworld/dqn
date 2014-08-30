@@ -89,12 +89,15 @@ def learn_from_experience_replay(atari, i, net, solver):
         # TODO: Figure out if loss (not just gradient) needs to be calculated.
         set_gradients_on_caffe_net(net, q_gradients)
         solver.online_update()
+
         for transition in transition_minibatch:
             q_max, q_values, action_index, reward = \
                 get_update_variables(atari, net, solver, transition)
             q_sum_after += sum(q_values)
     print 'q_sum_after: ', q_sum_after
     print 'q diff: ', (q_sum_after - q_sum_orig)
+    # if q_sum_after != q_sum_orig:
+    #     raw_input('wow something happened, press a key')
 
 
     if os.path.isfile('show_graphs'):
