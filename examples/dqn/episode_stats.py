@@ -1,5 +1,7 @@
+from datetime import datetime
 import pandas as pd
 from collections import OrderedDict
+
 
 class EpisodeStats(object):
     def __init__(self):
@@ -13,6 +15,7 @@ class EpisodeStats(object):
         self.exploit_actions = []
         self.q_diffs         = []
         self.q_max_diffs     = []
+        self.episode_count   = 0
 
     def add(self, q, reward, exploit, action, q_diff, q_max_diff):
         self.q_values           .append(q)
@@ -57,3 +60,13 @@ class EpisodeStats(object):
         name = name.replace('series', '')
         for k, v in stats.iteritems():
             d[name + k] = v
+
+    @staticmethod
+    def log_csv(episode_count, episode_stats, log_file_name):
+        aggregates = episode_stats.aggregates()
+        with open(log_file_name, 'a') as log:
+            if episode_count == 0:
+                # Write headers
+                log.write(','.join(['time'] + aggregates.keys()) + '\n')
+            cols = [datetime.utcnow()] + aggregates.values()
+            log.write(','.join([str(c) for c in cols]) + '\n')

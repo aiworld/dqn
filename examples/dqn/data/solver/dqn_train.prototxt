@@ -1,0 +1,139 @@
+name: "dqn"
+# The memory data does not process the input data
+# N.B. input should be between [0, 1]
+#   i.e. raw data pixels scaled by 0.00390625 (1/255)
+# max batch size is determined by the num field of bottom blobs
+#   passed in the MemoryDataLayer::SetUp
+#
+layers {
+  name: "data"
+  type: MEMORY_DATA
+  top: "data"
+  top: "label"
+  memory_data_param {
+    batch_size: 1
+    channels: 4
+    height: 84
+    width: 84
+  }
+}
+# The first hidden layer convolves 16 8 x 8 filters with stride 4 with the
+# input image and applies a rectifier nonlinearity [10, 18].
+layers {
+  name: "conv1"
+  type: CONVOLUTION
+  bottom: "data"
+  top: "conv1"
+  blobs_lr: 1
+  blobs_lr: 2
+  convolution_param {
+    num_output: 16 # channels
+    kernel_size: 8 # height and width
+    stride: 4
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+layers {
+  name: "relu1"
+  type: RELU
+  bottom: "conv1"
+  top: "conv1"
+}
+
+# The second hidden layer convolves 32 4 x 4 filters with stride 2,
+# again followed by a rectifier nonlinearity.
+layers {
+  name: "conv2"
+  type: CONVOLUTION
+  bottom: "conv1"
+  top: "conv2"
+  blobs_lr: 1
+  blobs_lr: 2
+  weight_decay: 1
+  weight_decay: 0
+  convolution_param {
+    num_output: 32 # filters used and channels out
+    kernel_size: 4 # height and width
+    stride: 2
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 1
+    }
+  }
+}
+
+layers {
+  name: "relu2"
+  type: RELU
+  bottom: "conv2"
+  top: "conv2"
+}
+
+# The final hidden layer is fully-connected and consists of 256 rectifier units.
+layers {
+  name: "fc1"
+  type: INNER_PRODUCT
+  bottom: "conv2"
+  top: "fc1"
+  blobs_lr: 1
+  blobs_lr: 2
+  weight_decay: 1
+  weight_decay: 0
+  inner_product_param {
+    num_output: 256
+    weight_filler {
+      type: "gaussian"
+      std: 0.005
+    }
+    bias_filler {
+      type: "constant"
+      value: 1
+    }
+  }
+}
+
+# TODO: Do we need a non-linearity activation layer here?
+
+# The output layer is a fully- connected linear layer with a single output for each valid action.
+layers {
+  name: "fc2"
+  type: INNER_PRODUCT
+  bottom: "fc1"
+  top: "fc2"
+  blobs_lr: 1
+  blobs_lr: 2
+  weight_decay: 1
+  weight_decay: 0
+  inner_product_param {
+    num_output: 18 # Number of actions
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# TODO: Do we need a non-linearity activation layer here?
+
+# layers {
+#   name: "loss"
+#   type: SOFTMAX_LOSS
+#   bottom: "fc2"
+#   bottom: "label"
+# }
