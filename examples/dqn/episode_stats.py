@@ -11,17 +11,21 @@ class EpisodeStats(object):
         self.explore_rewards = []
         self.explore_qs      = []
         self.exploit_actions = []
+        self.q_diffs         = []
+        self.q_max_diffs     = []
 
-    def add(self, q, reward, exploit, action):
-        self.q_values.append(q)
-        self.rewards.append(reward)
-        self.exploits.append(exploit)
+    def add(self, q, reward, exploit, action, q_diff, q_max_diff):
+        self.q_values           .append(q)
+        self.rewards            .append(reward)
+        self.exploits           .append(exploit)
+        self.q_diffs            .append(q_diff)
+        self.q_max_diffs        .append(q_max_diff)
         if exploit:
-            self.exploit_qs.append(q)
+            self.exploit_qs     .append(q)
             self.exploit_rewards.append(reward)
             self.exploit_actions.append(action.value)
         else:
-            self.explore_qs.append(q)
+            self.explore_qs     .append(q)
             self.explore_rewards.append(reward)
 
     def aggregates(self):
@@ -30,7 +34,7 @@ class EpisodeStats(object):
         exploit_qs_series      = pd.Series(self.exploit_qs)
         explore_qs_series      = pd.Series(self.explore_qs)
         exploit_rewards_series = pd.Series(self.exploit_rewards)
-        explore_rewards_series = pd.Series(self.explore_rewards)
+        q_diffs_series         = pd.Series(self.q_diffs)
         ret = OrderedDict()
         for name, var in locals().iteritems():
             if name.endswith('series'):

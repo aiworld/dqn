@@ -12,9 +12,10 @@ import dqn.atari_actions as actions
 import math
 from dqn import atari_actions
 import os.path
-import pandas as pd
+from scipy.spatial import distance
 from dqn.episode_stats import EpisodeStats
 
+LAYER_NAMES = ['conv1', 'conv2', 'fc1', 'fc2']
 EXPERIENCE_WINDOW_SIZE = 4
 
 # Epsilon annealed linearly from 1 to 0.1 over the first million frames,
@@ -58,8 +59,8 @@ def go():
         exploit = should_exploit(i)
         if not exploit:
             action = atari_actions.get_random_action()
-        record_episode_stats(episode_stats, atari, experience, q, action, exploit)
-        learn_from_experience_replay(atari, i, net, solver)
+        q_diff, q_max_diff = learn_from_experience_replay(atari, net, solver)
+        record_episode_stats(episode_stats, atari, experience, q, action, exploit, q_diff, q_max_diff)
         if atari.game_over:
             log_csv(episode_count, episode_stats)
             episode_count += 1
@@ -68,42 +69,74 @@ def go():
             atari = Atari()
 
 
-def learn_from_experience_replay(atari, i, net, solver):
-    transition_minibatch = \
-        atari.get_random_transitions(num=MINIBATCH_SIZE)
+def forward_minibatch(atari, net, solver, transition_minibatch):
     q_gradients = [0.0] * len(atari_actions.ALL)
-    q_sum_orig = 0
-
+    q_sum = 0
+    q_max_sum = 0
     for transition in transition_minibatch:
         q_max, q_values, action_index, reward = \
             get_update_variables(atari, net, solver, transition)
-        q_sum_orig += sum(q_values)
+        q_sum += sum(q_values)
+        q_max_sum += q_max
         for j, q_old in enumerate(q_values):
             q_new = reward + GAMMA * q_max
             # assert(q_old < 1)
             q_gradients[j] += q_old - q_new
+    return q_gradients, q_max_sum, q_sum
+
+
+def process_minibatch(atari, net, solver, transition_minibatch):
+    q_gradients, q_max_sum_orig, q_sum_orig = forward_minibatch(
+        atari,
+        net,
+        solver,
+        transition_minibatch)
     print 'q_sum_orig: ', q_sum_orig
-    q_sum_after = 0
-    if transition_minibatch:
-        q_gradients = 1.0 / float(MINIBATCH_SIZE) * np.array(q_gradients)  # avg
-        # TODO: Figure out if loss (not just gradient) needs to be calculated.
-        set_gradients_on_caffe_net(net, q_gradients)
-        solver.online_update()
-
-        for transition in transition_minibatch:
-            q_max, q_values, action_index, reward = \
-                get_update_variables(atari, net, solver, transition)
-            q_sum_after += sum(q_values)
+    q_gradients = 1.0 / float(MINIBATCH_SIZE) * np.array(q_gradients)  # avg
+    # TODO: Figure out if loss (not just gradient) needs to be calculated.
+    set_gradients_on_caffe_net(net, q_gradients)
+    layers_orig = get_layer_state(net)
+    solver.online_update()
+    layers_after = get_layer_state(net)
+    print_layer_distances(layers_orig, layers_after)
+    _, q_max_sum_after, q_sum_after = forward_minibatch(
+        atari,
+        net,
+        solver,
+        transition_minibatch)
     print 'q_sum_after: ', q_sum_after
-    print 'q diff: ', (q_sum_after - q_sum_orig)
+    q_diff = q_sum_after - q_sum_orig
+    q_max_diff = q_max_sum_after - q_max_sum_orig
+    print 'q diff: ', q_diff
     # if q_sum_after != q_sum_orig:
-    #     raw_input('wow something happened, press a key')
-
-
+    # raw_input('wow something happened, press a key')
     if os.path.isfile('show_graphs'):
         filters = net.params['conv1'][0].data
         vis_square(filters.transpose(0, 2, 3, 1))
         plot_layers(net)
+    return q_diff, q_max_diff
+
+
+def learn_from_experience_replay(atari, net, solver):
+    transition_minibatch = \
+        atari.get_random_transitions(num=MINIBATCH_SIZE)
+    q_diff = 0.0
+    q_max_diff = 0.0
+    if transition_minibatch:
+        q_diff, q_max_diff = \
+            process_minibatch(atari, net, solver, transition_minibatch)
+    return q_diff, q_max_diff
+
+def get_layer_state(net):
+    ret = []
+    for name in LAYER_NAMES:
+        ret.append(np.copy(net.params[name][0].data.flat))
+    return ret
+
+
+def print_layer_distances(layers_orig, layers_after):
+    for i in xrange(len(layers_orig)):
+        print distance.euclidean(layers_orig[i], layers_after[i])
 
 
 def set_gradients_on_caffe_net(net, q_gradients):
@@ -143,9 +176,9 @@ def perceive(atari, solver, net, experience):
     return q_values[action_index], atari_actions.ALL.values()[action_index]
 
 
-def record_episode_stats(episode_stats, atari, experience, q, action, exploit):
+def record_episode_stats(episode_stats, atari, experience, q, action, exploit, q_diff, q_max_diff):
     reward = atari.get_reward_from_experience(experience)
-    episode_stats.add(q, reward, exploit, action)
+    episode_stats.add(q, reward, exploit, action, q_diff, q_max_diff)
 
 
 def get_random_q_max_index(q_values):
@@ -179,7 +212,7 @@ def get_update_variables(atari, net, solver, experience_pair):
 
 
 def plot_layers(net):
-    names = ['conv1', 'conv2', 'fc1', 'fc2']
+    names = LAYER_NAMES
     metrics = ['data', 'params', 'gradients']
     data_funcs = {
         'data':      lambda net, name: net.blobs[name].data[0],

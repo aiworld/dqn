@@ -9,15 +9,15 @@ test_iter: 1
 test_interval: 1
 
 # The base learning rate, momentum and the weight decay of the network.
-base_lr: 0.01
+base_lr: 0.001
 momentum: 0.9
 weight_decay: 0.0005
 
 # The learning rate policy
-#lr_policy: "fixed"
-lr_policy: "step"
-gamma: 0.9
-stepsize: 10
+lr_policy: "fixed"
+#lr_policy: "step"
+#gamma: 0.9
+#stepsize: 1
 
 # Display every x iterations
 display: 1
