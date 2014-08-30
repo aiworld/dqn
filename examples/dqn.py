@@ -72,18 +72,30 @@ def learn_from_experience_replay(atari, i, net, solver):
     transition_minibatch = \
         atari.get_random_transitions(num=MINIBATCH_SIZE)
     q_gradients = [0.0] * len(atari_actions.ALL)
+    q_sum_orig = 0
+
     for transition in transition_minibatch:
         q_max, q_values, action_index, reward = \
             get_update_variables(atari, net, solver, transition)
-        for j, q in enumerate(q_values):
-            assert(q < 1)
-            q_gradients[j] += (reward + GAMMA * q_max - q) * q
-
+        q_sum_orig += sum(q_values)
+        for j, q_old in enumerate(q_values):
+            q_new = reward + GAMMA * q_max
+            # assert(q_old < 1)
+            q_gradients[j] += q_old - q_new
+    print 'q_sum_orig: ', q_sum_orig
+    q_sum_after = 0
     if transition_minibatch:
         q_gradients = 1.0 / float(MINIBATCH_SIZE) * np.array(q_gradients)  # avg
         # TODO: Figure out if loss (not just gradient) needs to be calculated.
         set_gradients_on_caffe_net(net, q_gradients)
         solver.online_update()
+        for transition in transition_minibatch:
+            q_max, q_values, action_index, reward = \
+                get_update_variables(atari, net, solver, transition)
+            q_sum_after += sum(q_values)
+    print 'q_sum_after: ', q_sum_after
+    print 'q diff: ', (q_sum_after - q_sum_orig)
+
 
     if os.path.isfile('show_graphs'):
         filters = net.params['conv1'][0].data
