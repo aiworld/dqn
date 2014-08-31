@@ -14,8 +14,7 @@ class EpisodeStats(object):
         self.explore_rewards = []
         self.explore_qs      = []
         self.exploit_actions = []
-        self.q_diffs         = []
-        self.q_max_diffs     = []
+        self.improvements    = []
         self.l1_loss         = []
         self.episode_count   = 0
         self.layer_distances = {}
@@ -26,8 +25,7 @@ class EpisodeStats(object):
         self.q_values           .append(q)
         self.rewards            .append(reward)
         self.exploits           .append(exploit)
-        self.q_diffs            .append(episode_stat.q_diff)
-        self.q_max_diffs        .append(episode_stat.q_max_diff)
+        self.improvements       .append(episode_stat.improvement)
         self.l1_loss            .append(episode_stat.l1_loss)
         self.add_layer_distances(episode_stat.layer_distances)
         if exploit:
@@ -48,7 +46,7 @@ class EpisodeStats(object):
         exploit_qs_series      = pd.Series(self.exploit_qs)
         explore_qs_series      = pd.Series(self.explore_qs)
         exploit_rewards_series = pd.Series(self.exploit_rewards)
-        q_diffs_series         = pd.Series(self.q_diffs)
+        improvements_series    = pd.Series(self.improvements)
         l1_loss_series         = pd.Series(self.l1_loss)
         ret = OrderedDict()
         for name, var in sorted(locals().iteritems()):
@@ -66,6 +64,7 @@ class EpisodeStats(object):
         return ret
 
     def add_series_vars(self, name, series, d):
+        print 'adding series for ' + name
         stats           = OrderedDict(series.describe())
         stats['median'] = series.median()
         stats['total']  = series.sum()
@@ -87,8 +86,7 @@ class EpisodeStats(object):
 
 
 class EpisodeStat():
-    def __init__(self, q_diff, q_max_diff, layer_distances, l1_loss):
-        self.q_diff          = q_diff
-        self.q_max_diff      = q_max_diff
+    def __init__(self, improvement, layer_distances, l1_loss):
+        self.improvement     = improvement
         self.layer_distances = layer_distances
         self.l1_loss         = l1_loss

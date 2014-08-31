@@ -30,16 +30,31 @@ class DqnSolver(object):
         q_gradients = [0.0] * len(actions.ALL)
         q_sum = 0
         q_max_sum = 0
+        q_olds = []
         for transition in transition_minibatch:
             q_max, q_values, action_index, reward = \
                 self.get_update_variables(transition)
             q_sum += sum(q_values)
             q_max_sum += q_max
+            q_olds.append(q_values)
             for j, q_old in enumerate(q_values):
                 q_new = reward + GAMMA * q_max
                 # assert(q_old < 1)
                 q_gradients[j] += q_old - q_new
-        return q_gradients, q_max_sum, q_sum
+        return q_gradients, q_max_sum, q_sum, q_olds
+
+    def forward_check(self, q_olds, transition_minibatch):
+        """Sanity check that we are moving in the right direction"""
+        improvement = 0
+        for i, transition in enumerate(transition_minibatch):
+            q_max, q_values, action_index, reward = \
+                self.get_update_variables(transition)
+            q_values_old = q_olds[i]
+            for j, q_old in enumerate(q_values_old):
+                q_new = reward + GAMMA * q_max
+                # assert(q_old < 1)
+                improvement += (q_new - q_old)
+        return improvement
 
     def show_graphs(self):
         if os.path.isfile('show_graphs'):
@@ -48,7 +63,7 @@ class DqnSolver(object):
             self.plot_layers()
 
     def process_minibatch(self, transition_batch):
-        q_gradients, q_max_sum_orig, q_sum_orig = \
+        q_gradients, q_max_sum_orig, q_sum_orig, q_olds = \
             self.forward_batch(transition_batch)
         print 'q_sum_orig: ', q_sum_orig
         q_gradients = 1.0 / float(MINIBATCH_SIZE) * np.array(q_gradients)  # avg
@@ -58,13 +73,9 @@ class DqnSolver(object):
         self.solver.online_update()  # backprop
         layers_after = self.get_layer_state()
         layer_distances = self.get_layer_distances(layers_orig, layers_after)
-        _, q_max_sum_after, q_sum_after = self.forward_batch(transition_batch)
-        print 'q_sum_after: ', q_sum_after
-        q_diff = q_sum_after - q_sum_orig
-        q_max_diff = q_max_sum_after - q_max_sum_orig
-        print 'q diff: ', q_diff
+        improvement = self.forward_check(q_olds, transition_batch)
         self.show_graphs()
-        return EpisodeStat(q_diff, q_max_diff, layer_distances,
+        return EpisodeStat(improvement, layer_distances,
                            l1_norm(q_gradients))
 
     def learn_from_experience_replay(self):
@@ -73,7 +84,7 @@ class DqnSolver(object):
         if transition_minibatch:
             return self.process_minibatch(transition_minibatch)
         else:
-            return EpisodeStat(0.0, 0.0, [], 0.0)
+            return EpisodeStat(0.0, [], 0.0)
 
     def get_layer_state(self):
         ret = []
