@@ -5,9 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import distance
 import atari_actions as actions
-from examples.dqn import utils
-
-LAYER_NAMES = ['conv1', 'conv2', 'fc1', 'fc2']
+from utils import *
+from constants import LAYER_NAMES
+from episode_stats import EpisodeStat
 # Epsilon annealed linearly from 1 to 0.1 over the first million frames,
 # and fixed at 0.1 thereafter
 EPSILON_START = 1.0
@@ -44,7 +44,7 @@ class DqnSolver(object):
     def show_graphs(self):
         if os.path.isfile('show_graphs'):
             filters = self.net.params['conv1'][0].data
-            utils.vis_square(filters.transpose(0, 2, 3, 1))
+            vis_square(filters.transpose(0, 2, 3, 1))
             self.plot_layers()
 
     def process_minibatch(self, transition_batch):
@@ -55,26 +55,25 @@ class DqnSolver(object):
         # TODO: Figure out if loss (not just gradient) needs to be calculated.
         self.set_gradients_on_caffe_net(q_gradients)
         layers_orig = self.get_layer_state()
-        self.solver.online_update()
+        self.solver.online_update()  # backprop
         layers_after = self.get_layer_state()
-        self.print_layer_distances(layers_orig, layers_after)
+        layer_distances = self.get_layer_distances(layers_orig, layers_after)
         _, q_max_sum_after, q_sum_after = self.forward_batch(transition_batch)
         print 'q_sum_after: ', q_sum_after
         q_diff = q_sum_after - q_sum_orig
         q_max_diff = q_max_sum_after - q_max_sum_orig
         print 'q diff: ', q_diff
         self.show_graphs()
-        return q_diff, q_max_diff
+        return EpisodeStat(q_diff, q_max_diff, layer_distances,
+                           l1_norm(q_gradients))
 
     def learn_from_experience_replay(self):
         transition_minibatch = \
             self.atari.get_random_transitions(num=MINIBATCH_SIZE)
-        q_diff = 0.0
-        q_max_diff = 0.0
         if transition_minibatch:
-            q_diff, q_max_diff = \
-                self.process_minibatch(transition_minibatch)
-        return q_diff, q_max_diff
+            return self.process_minibatch(transition_minibatch)
+        else:
+            return EpisodeStat(0.0, 0.0, [], 0.0)
 
     def get_layer_state(self):
         ret = []
@@ -82,7 +81,7 @@ class DqnSolver(object):
             ret.append((layer_name, np.copy(self.net.params[layer_name][0].data.flat)))
         return ret
 
-    def print_layer_distances(self, layers_orig, layers_after):
+    def get_layer_distances(self, layers_orig, layers_after):
         ret = []
         for i in xrange(len(layers_orig)):
             dist = distance.euclidean(layers_orig[i][1],
@@ -126,9 +125,9 @@ class DqnSolver(object):
         return q_values[action_index], actions.ALL.values()[action_index]
 
     def record_episode_stats(self, episode_stats, experience, q, action,
-                             exploit, q_diff, q_max_diff):
+                             exploit, episode_stat):
         reward = self.atari.get_reward_from_experience(experience)
-        episode_stats.add(q, reward, exploit, action, q_diff, q_max_diff)
+        episode_stats.add(q, reward, exploit, action, episode_stat)
 
     def get_random_q_max_index(self, q_values):
         # Randomly break ties between actions with the same Q (quality).
@@ -179,9 +178,10 @@ class DqnSolver(object):
                 feat = data_funcs[metric](layer_name).flat
                 axarr[i, 0].plot(feat)
                 axarr[i, 0].set_title(layer_name + ' ' + metric)
+                # noinspection PyBroadException
                 try:
                     axarr[i, 1].hist(feat[feat > 0], bins=100)
-                except Exception, e:
+                except:
                     print 'problem with histogram', layer_name, metric
                 else:
                     axarr[i, 1].set_title(layer_name + ' ' + metric + ' histogram')

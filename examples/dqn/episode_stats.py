@@ -1,6 +1,7 @@
 from datetime import datetime
 import pandas as pd
 from collections import OrderedDict
+from constants import LAYER_NAMES
 
 
 class EpisodeStats(object):
@@ -15,14 +16,20 @@ class EpisodeStats(object):
         self.exploit_actions = []
         self.q_diffs         = []
         self.q_max_diffs     = []
+        self.l1_loss         = []
         self.episode_count   = 0
+        self.layer_distances = {}
+        for layer_name in LAYER_NAMES:
+            self.layer_distances[layer_name] = []
 
-    def add(self, q, reward, exploit, action, q_diff, q_max_diff):
+    def add(self, q, reward, exploit, action, episode_stat):
         self.q_values           .append(q)
         self.rewards            .append(reward)
         self.exploits           .append(exploit)
-        self.q_diffs            .append(q_diff)
-        self.q_max_diffs        .append(q_max_diff)
+        self.q_diffs            .append(episode_stat.q_diff)
+        self.q_max_diffs        .append(episode_stat.q_max_diff)
+        self.l1_loss            .append(episode_stat.l1_loss)
+        self.add_layer_distances(episode_stat.layer_distances)
         if exploit:
             self.exploit_qs     .append(q)
             self.exploit_rewards.append(reward)
@@ -31,6 +38,10 @@ class EpisodeStats(object):
             self.explore_qs     .append(q)
             self.explore_rewards.append(reward)
 
+    def add_layer_distances(self, layer_distances):
+        for dist in layer_distances:
+            self.layer_distances[dist[0]].append(dist[1])
+
     def aggregates(self):
         q_series               = pd.Series(self.q_values)
         reward_series          = pd.Series(self.rewards)
@@ -38,15 +49,18 @@ class EpisodeStats(object):
         explore_qs_series      = pd.Series(self.explore_qs)
         exploit_rewards_series = pd.Series(self.exploit_rewards)
         q_diffs_series         = pd.Series(self.q_diffs)
+        l1_loss_series         = pd.Series(self.l1_loss)
         ret = OrderedDict()
-        for name, var in locals().iteritems():
+        for name, var in sorted(locals().iteritems()):
             if name.endswith('series'):
                 self.add_series_vars(name, var, ret)
-
+        for layer_name in LAYER_NAMES:
+            self.add_series_vars(
+                layer_name + '_distance_',
+                pd.Series(self.layer_distances[layer_name]), ret)
         exploit_series = pd.Series(self.exploits)
         ret['num_exploits'] = \
             exploit_series.where(exploit_series == True).count()
-
         ret['exploit_action_count'] = len(set(self.exploit_actions))
         ret['length'] = len(self.rewards)
         return ret
@@ -70,3 +84,11 @@ class EpisodeStats(object):
                 log.write(','.join(['time'] + aggregates.keys()) + '\n')
             cols = [datetime.utcnow()] + aggregates.values()
             log.write(','.join([str(c) for c in cols]) + '\n')
+
+
+class EpisodeStat():
+    def __init__(self, q_diff, q_max_diff, layer_distances, l1_loss):
+        self.q_diff          = q_diff
+        self.q_max_diff      = q_max_diff
+        self.layer_distances = layer_distances
+        self.l1_loss         = l1_loss

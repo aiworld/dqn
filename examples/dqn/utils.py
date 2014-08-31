@@ -1,3 +1,4 @@
+from collections import namedtuple
 import numpy as np
 import matplotlib.pyplot as plt
 import caffe
@@ -67,3 +68,7 @@ def get_solver():
 
 def rgb2gray(rgb):
     return np.dot(rgb[..., :3], [0.299, 0.587, 0.144])
+
+
+def l1_norm(v):
+    return np.linalg.norm(v, ord=1)
