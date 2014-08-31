@@ -28,7 +28,7 @@ def go():
         episode_stat = dqn.learn_from_experience_replay()
         dqn.record_episode_stats(episode_stats, experience, q, action, exploit,
                                  episode_stat)
-        if True or atari.game_over:
+        if atari.game_over:
             EpisodeStats.log_csv(episode_count, episode_stats, log_file_name)
             episode_count += 1
             episode_stats = EpisodeStats()
