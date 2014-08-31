@@ -4,12 +4,13 @@ from atari import Atari
 import atari_actions as actions
 from episode_stats import EpisodeStats
 from dqn_solver import DqnSolver
+from constants import *
 
 EXPERIENCE_WINDOW_SIZE = 4
 
 
 def go():
-    log_file_name = '/s/caffe/examples/dqn/data/episodes/episode_log_' + str(int(time.time())) + '.csv'
+    log_file_name = get_episode_log_filename()
     utils.setup_matplotlib()
     solver = utils.get_solver()
     net = solver.net
@@ -34,6 +35,10 @@ def go():
             atari.stop()
             atari = Atari()
         dqn.iter = i
+
+
+def get_episode_log_filename():
+    return '%s/data/episodes/episode_log_%d.csv' % (DQN_ROOT, int(time.time()))
 
 if __name__ == '__main__':
     go()
