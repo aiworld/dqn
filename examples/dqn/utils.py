@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 import caffe
@@ -71,3 +72,8 @@ def rgb2gray(rgb):
 
 def l1_norm(v):
     return np.linalg.norm(v, ord=1)
+
+
+def repeat(func, times):
+    for _ in itertools.repeat(None, times):
+        func()

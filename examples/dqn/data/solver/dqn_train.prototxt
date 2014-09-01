@@ -117,7 +117,7 @@ layers {
   weight_decay: 1
   weight_decay: 0
   inner_product_param {
-    num_output: 18 # Number of actions
+    num_output: 3 # Number of actions
     weight_filler {
       type: "gaussian"
       std: 0.01

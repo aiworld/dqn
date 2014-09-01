@@ -16,13 +16,15 @@ class ActionSidebarImages(object):
         height       = 84,
         color        = 1,
         background   = 0,
-        action_count = 18
+        action_count = 18,
+        show         = False
     ):
         self.width           = width
         self.height          = height
         self.color           = color
         self.background      = background
         self.action_count    = action_count
+        self.show            = show
         self.random_nums     = self.initialize_random_nums()
         self._rand_num_index = 0
         self.images          = self.get_images()
@@ -48,12 +50,12 @@ class ActionSidebarImages(object):
             if all_images is None:
                 all_images = image
             else:
-                all_images = np.concatenate((all_images, sep), axis=1)
+                all_images = np.concatenate((all_images, sep  ), axis=1)
                 all_images = np.concatenate((all_images, image), axis=1)
             print name
             images[action.value] = image
 
-        if False:
+        if self.show:
             plt.imshow(all_images, cmap=plt.get_cmap('gray'))
             plt.show()
         return images
@@ -91,4 +93,4 @@ class ActionSidebarImages(object):
 
 
 if __name__ == '__main__':
-    ActionSidebarImages()
+    ActionSidebarImages(show=True)

@@ -16,7 +16,7 @@ def go():
     net = solver.net
     atari = Atari()
     episode_count = 0
-    action = actions.MOVE_RIGHT
+    action = actions.MOVE_RIGHT_AND_FIRE
     episode_stats = EpisodeStats()
     dqn = DqnSolver(atari, net, solver)
     for i in xrange(int(1E7)):  # 10 million training steps
