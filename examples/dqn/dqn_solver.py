@@ -1,8 +1,6 @@
 import random
 import math
 import os.path
-import numpy as np
-import matplotlib.pyplot as plt
 from scipy.spatial import distance
 import atari_actions as actions
 from utils import *
@@ -26,6 +24,34 @@ class DqnSolver(object):
         self.solver          = solver
         self.iter            = 0
         self._forced_exploit = False
+
+    def learn_from_experience_replay(self):
+        transition_minibatch = \
+            self.atari.get_random_transitions(num=MINIBATCH_SIZE)
+        if transition_minibatch:
+            transition_minibatch = \
+                self.propagate_game_over_backwards(transition_minibatch)
+            return self.process_minibatch(transition_minibatch)
+        else:
+            return EpisodeStat(0.0, [], 0.0)
+
+    def propagate_game_over_backwards(self, transition_minibatch):
+        ret = []
+        tm = transition_minibatch
+        # TODO: Make sure this is not permanently stored.
+        for i, transition in enumerate(tm):
+            steps_back = 10
+            if i > steps_back and \
+                    self.atari.get_game_over_from_experience(transition[0]):
+                start = max(0, i - steps_back)
+                for exp1, exp2 in tm[start:i + 1]:
+                    ret.append((
+                        self.atari.substitute_reward_in_experience(exp1, -1),
+                        self.atari.substitute_reward_in_experience(exp2, -1)
+                    ))
+                # Assume max of one game over per minibatch
+                return tm[:start] + ret + tm[i + 1:]
+        return transition_minibatch
 
     def forward_batch(self, transition_minibatch):
         q_gradients = [0.0] * len(actions.ALL)
@@ -58,7 +84,7 @@ class DqnSolver(object):
 
     def improvement_check_one(self, transition_minibatch):
         for transition in transition_minibatch:
-            reward = self.atari.get_reward_from_experience(transition[1])
+            reward, _ = self.atari.get_reward_from_experience(transition[1])
             if reward != 0:
                 q_gradients = [0.0] * len(actions.ALL)
                 q_max, q_values, action_index, reward = \
@@ -95,15 +121,11 @@ class DqnSolver(object):
         if os.path.isfile('show_graphs'):
             filters = self.net.params['conv1'][0].data
             vis_square(filters.transpose(0, 2, 3, 1))
+            filters = self.net.params['conv2'][0].data
+            vis_square(filters.reshape(32 *   # Filters
+                                       16,    # Dimensions
+                                       4, 4)) # h, w
             self.plot_layers()
-
-    def learn_from_experience_replay(self):
-        transition_minibatch = \
-            self.atari.get_random_transitions(num=MINIBATCH_SIZE)
-        if transition_minibatch:
-            return self.process_minibatch(transition_minibatch)
-        else:
-            return EpisodeStat(0.0, [], 0.0)
 
     def get_layer_state(self):
         ret = []
@@ -156,8 +178,8 @@ class DqnSolver(object):
 
     def record_episode_stats(self, episode_stats, experience, q, action,
                              exploit, episode_stat):
-        reward = self.atari.get_reward_from_experience(experience)
-        episode_stats.add(q, reward, exploit, action, episode_stat)
+        reward, score = self.atari.get_reward_from_experience(experience)
+        episode_stats.add(q, reward, score, exploit, action, episode_stat)
 
     def get_random_q_max_index(self, q_values):
         # Randomly break ties between actions with the same Q (quality).
@@ -184,7 +206,7 @@ class DqnSolver(object):
         print 'q_values_two', q_values_two
         q_max_index = self.get_random_q_max_index(q_values_two)
         q_max = q_values_two[q_max_index]
-        reward = atari.get_reward_from_experience(exp2)
+        reward, _ = atari.get_reward_from_experience(exp2)
         # state(exp1) -> action(exp2) -> reward(exp2)
         return q_max, q_values_one, exp2_action.index, reward
 

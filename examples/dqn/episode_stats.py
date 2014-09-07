@@ -8,6 +8,7 @@ class EpisodeStats(object):
     def __init__(self):
         self.q_values        = []
         self.rewards         = []
+        self.score           = []
         self.exploits        = []
         self.exploit_rewards = []
         self.exploit_qs      = []
@@ -21,9 +22,10 @@ class EpisodeStats(object):
         for layer_name in LAYER_NAMES:
             self.layer_distances[layer_name] = []
 
-    def add(self, q, reward, exploit, action, episode_stat):
+    def add(self, q, reward, score, exploit, action, episode_stat):
         self.q_values           .append(q)
         self.rewards            .append(reward)
+        self.score              .append(score)
         self.exploits           .append(exploit)
         self.improvements       .append(episode_stat.improvement)
         self.l1_loss            .append(episode_stat.l1_loss)
@@ -43,6 +45,7 @@ class EpisodeStats(object):
     def aggregates(self):
         q_series               = pd.Series(self.q_values)
         reward_series          = pd.Series(self.rewards)
+        score_series           = pd.Series(self.score)
         exploit_qs_series      = pd.Series(self.exploit_qs)
         explore_qs_series      = pd.Series(self.explore_qs)
         exploit_rewards_series = pd.Series(self.exploit_rewards)
