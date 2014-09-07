@@ -18,12 +18,13 @@ LEARNING_RATE = 0.6
 
 
 class DqnSolver(object):
-    def __init__(self, atari, net, solver):
+    def __init__(self, atari, net, solver, start_timestamp):
         self.atari           = atari
         self.net             = net
         self.solver          = solver
         self.iter            = 0
         self._forced_exploit = False
+        self.start_timestamp = start_timestamp
 
     def learn_from_experience_replay(self):
         transition_minibatch = \
@@ -113,18 +114,23 @@ class DqnSolver(object):
         layers_after = self.get_layer_state()
         layer_distances = self.get_layer_distances(layers_orig, layers_after)
         improvement = self.forward_check(q_olds, transition_batch)
-        self.show_graphs()
+        self.save_graphs()
         return EpisodeStat(improvement, layer_distances,
                            l1_norm(q_gradients))
 
-    def show_graphs(self):
-        if os.path.isfile('show_graphs'):
-            filters = self.net.params['conv1'][0].data
-            vis_square(filters.transpose(0, 2, 3, 1))
-            filters = self.net.params['conv2'][0].data
-            vis_square(filters.reshape(32 *   # Filters
-                                       16,    # Dimensions
-                                       4, 4)) # h, w
+    def save_graphs(self):
+        if self.iter % 150 == 0:
+            filters = np.copy(self.net.params['conv1'][0].data)
+            vis_square(filters.transpose(0, 2, 3, 1), im_name='conv1',
+                       batch=self.start_timestamp)
+
+            filters = np.copy(self.net.params['conv2'][0].data)
+            vis_square(filters.reshape(32 *    # Filters
+                                       16,     # Dimensions
+                                       4, 4),  # h, w
+                        im_name='conv2',
+                        batch=self.start_timestamp)
+
             self.plot_layers()
 
     def get_layer_state(self):
@@ -239,7 +245,7 @@ class DqnSolver(object):
                     axarr[i, 1].set_title(layer_name + ' ' + metric + ' histogram')
                 i += 1
         f.subplots_adjust(hspace=1.3)
-        plt.show()
+        plt.savefig(get_image_path('layers', self.start_timestamp))
 
     def get_q_values(self, state):
         """ fprop the state through the net

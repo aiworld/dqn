@@ -1,4 +1,5 @@
 import itertools
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import caffe
@@ -9,9 +10,11 @@ import skimage.transform
 # take an array of shape (n, height, width) or (n, height, width, channels)
 #  and visualize each (height, width) thing in a grid of size approx. sqrt(n) by sqrt(n)
 import sys
+import time
+from constants import DQN_ROOT
 
 
-def vis_square(data, padsize=1, padval=0):
+def vis_square(data, im_name, batch, padsize=1, padval=0):
     data -= data.min()
     data /= data.max()
 
@@ -24,15 +27,22 @@ def vis_square(data, padsize=1, padval=0):
     data = data.reshape((n, n) + data.shape[1:]).transpose((0, 2, 1, 3) + tuple(range(4, data.ndim + 1)))
     data = data.reshape((n * data.shape[1], n * data.shape[3]) + data.shape[4:])
 
-    show_image(data)
+    save_image(data, im_name, batch)
+
+
+def get_image_path(im_name, batch):
+    path = '%s/data/images_%s/' % (DQN_ROOT, batch)
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return '%s/%s_%d.jpg' % (path, im_name, int(time.time()))
 
 
 # our network takes BGR images, so we need to switch color channels
-def show_image(im):
+def save_image(im, im_name, batch):
     if im.ndim == 3:
         im = im[:, :, ::-1]
-    plt.imshow(im)
-    plt.show()
+    plt.imsave(get_image_path(im_name, batch), im)
+    # plt.show()
 
 
 def load_stacked_frames_from_disk(filename):

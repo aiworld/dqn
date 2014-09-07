@@ -10,7 +10,8 @@ EXPERIENCE_WINDOW_SIZE = 4
 
 
 def go():
-    log_file_name = get_episode_log_filename()
+    start_timestamp = int(time.time())
+    log_file_name = get_episode_log_filename(start_timestamp)
     utils.setup_matplotlib()
     solver = utils.get_solver()
     net = solver.net
@@ -18,7 +19,7 @@ def go():
     episode_count = 0
     action = actions.MOVE_RIGHT_AND_FIRE
     episode_stats = EpisodeStats()
-    dqn = DqnSolver(atari, net, solver)
+    dqn = DqnSolver(atari, net, solver, start_timestamp)
     for i in xrange(int(1E7)):  # 10 million training steps
         experience = atari.experience(EXPERIENCE_WINDOW_SIZE, action)
         q, action = dqn.perceive(experience)
@@ -37,8 +38,8 @@ def go():
         dqn.iter = i
 
 
-def get_episode_log_filename():
-    return '%s/data/episodes/episode_log_%d.csv' % (DQN_ROOT, int(time.time()))
+def get_episode_log_filename(start_timestamp):
+    return '%s/data/episodes/episode_log_%d.csv' % (DQN_ROOT, start_timestamp)
 
 if __name__ == '__main__':
     go()
