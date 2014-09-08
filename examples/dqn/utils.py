@@ -42,6 +42,7 @@ def save_image(im, im_name, batch):
     if im.ndim == 3:
         im = im[:, :, ::-1]
     plt.imsave(get_image_path(im_name, batch), im)
+    plt.close()
     # plt.show()
 
 

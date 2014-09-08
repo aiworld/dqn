@@ -36,6 +36,7 @@ def go():
             atari.stop()
             atari = Atari()
         dqn.iter = i
+        print 'dqn iteration: ', i
 
 
 def get_episode_log_filename(start_timestamp):

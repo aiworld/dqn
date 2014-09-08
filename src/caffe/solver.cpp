@@ -158,18 +158,14 @@ void Solver<Dtype>::OnlineForward() {
   // CQ: Split from Solve because we need to be able to set the input
   // of the memory data layer between every iteration.
 
-  LOG(INFO) << "Online forward starting";
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
   iter_++;
 
-  LOG(INFO) << "Online forward iter is " << iter_;
   vector<Blob<Dtype>*> bottom_vec; // CQ: shared ptr?
 
   Dtype loss;
   net_->Forward(bottom_vec, &loss);
-
-  LOG(INFO) << "Online forward ending";
 
   // Net forward returns loss via side effect.
   // Layer forward directly returns 0 unless a loss layer.
@@ -186,7 +182,6 @@ void Solver<Dtype>::OnlineUpdate() {
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
 //  Dtype loss = net_->ForwardBackward(bottom_vec);
-  LOG(INFO) << "Online update starting";
   net_->Backward();
   ComputeUpdateValue();
   net_->Update();
@@ -201,7 +196,6 @@ void Solver<Dtype>::OnlineUpdate() {
   if (param_.snapshot() && iter_ % param_.snapshot() == 0) {
     Snapshot();
   }
-  LOG(INFO) << "Online update finished";
 }
 
 
@@ -307,7 +301,6 @@ template <typename Dtype>
 Dtype SGDSolver<Dtype>::GetLearningRate() {
   Dtype rate;
   const string& lr_policy = this->param_.lr_policy();
-  LOG(INFO) << "learning rate policy: " << lr_policy;
   if (lr_policy == "fixed") {
     rate = this->param_.base_lr();
   } else if (lr_policy == "step") {

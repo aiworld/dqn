@@ -1,11 +1,18 @@
 import random
 import math
 import os.path
+import gc
 from scipy.spatial import distance
+import matplotlib.pyplot as plt
+import caffe
+import numpy as np
+import os
 import atari_actions as actions
-from utils import *
+from utils import vis_square, get_image_path, l1_norm
 from constants import LAYER_NAMES
 from episode_stats import EpisodeStat
+
+
 # Epsilon annealed linearly from 1 to 0.1 over the first million frames,
 # and fixed at 0.1 thereafter
 EPSILON_START = 1.0
@@ -105,7 +112,6 @@ class DqnSolver(object):
         # self.improvement_check_one(transition_batch)
         q_gradients, q_max_sum_orig, q_sum_orig, q_olds = \
             self.forward_batch(transition_batch)
-        print 'q_sum_orig: ', q_sum_orig
         q_gradients = 1.0 / float(MINIBATCH_SIZE) * np.array(q_gradients)  # avg
         # TODO: Figure out if loss (not just gradient) needs to be calculated.
         self.set_gradients_on_caffe_net(q_gradients)
@@ -123,15 +129,16 @@ class DqnSolver(object):
             filters = np.copy(self.net.params['conv1'][0].data)
             vis_square(filters.transpose(0, 2, 3, 1), im_name='conv1',
                        batch=self.start_timestamp)
-
-            filters = np.copy(self.net.params['conv2'][0].data)
-            vis_square(filters.reshape(32 *    # Filters
-                                       16,     # Dimensions
-                                       4, 4),  # h, w
-                        im_name='conv2',
-                        batch=self.start_timestamp)
-
-            self.plot_layers()
+            del filters
+            filters = np.copy(self.net.params['conv2'][0].data).reshape(
+                32 *    # Filters
+                16,     # Dimensions
+                4, 4)  # h, w
+            vis_square(filters, im_name='conv2', batch=self.start_timestamp)
+            del filters
+            if self.iter % 15000 == 0:
+                # TODO: Solve memory leak before saving more frequently.
+                self.plot_layers()
 
     def get_layer_state(self):
         ret = []
@@ -246,6 +253,9 @@ class DqnSolver(object):
                 i += 1
         f.subplots_adjust(hspace=1.3)
         plt.savefig(get_image_path('layers', self.start_timestamp))
+        f.clf()
+        plt.close()
+        gc.collect()
 
     def get_q_values(self, state):
         """ fprop the state through the net

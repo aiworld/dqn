@@ -62,7 +62,6 @@ void InnerProductLayer<Dtype>::SetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 Dtype InnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     vector<Blob<Dtype>*>* top) {
-  LOG(INFO) << "Craig checking forward inner product";
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = (*top)[0]->mutable_cpu_data();
   const Dtype* weight = this->blobs_[0]->cpu_data();
@@ -81,7 +80,6 @@ void InnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     const bool propagate_down,
     vector<Blob<Dtype>*>* bottom) {
 
-  LOG(INFO) << "Inner product back prop";
   const Dtype* top_diff = top[0]->cpu_diff();
   const Dtype* bottom_data = (*bottom)[0]->cpu_data();
   // Gradient with respect to weight
@@ -107,14 +105,12 @@ void InnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 //  LOG(INFO) << "bottom data"   << *bottom_data;
 
   if (bias_term_) {
-    LOG(INFO) << "Inner product bias_term_ block";
     // Gradient with respect to bias
     caffe_cpu_gemv<Dtype>(CblasTrans, M_, N_, (Dtype)1., top_diff,
         reinterpret_cast<const Dtype*>(bias_multiplier_->cpu_data()), (Dtype)0.,
         this->blobs_[1]->mutable_cpu_diff());
   }
   if (propagate_down) {
-    LOG(INFO) << "Inner product propogate_down block";
     // Gradient with respect to bottom data
     caffe_cpu_gemm<Dtype>(
       CblasNoTrans,
