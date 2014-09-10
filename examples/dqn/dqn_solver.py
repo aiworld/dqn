@@ -22,6 +22,7 @@ EPSILON_SLOPE = -(1.0 - EPSILON_END) / EPSILON_ANNEALING_TIME
 GAMMA = 0.8  # Using pac-man value.
 MINIBATCH_SIZE = 32
 LEARNING_RATE = 0.6
+GAME_OVER_STEPS = 8
 
 
 class DqnSolver(object):
@@ -48,18 +49,23 @@ class DqnSolver(object):
         tm = transition_minibatch
         # TODO: Make sure this is not permanently stored.
         for i, transition in enumerate(tm):
-            steps_back = 10
-            if i > steps_back and \
-                    self.atari.get_game_over_from_experience(transition[0]):
-                start = max(0, i - steps_back)
-                for exp1, exp2 in tm[start:i + 1]:
+            if self.should_propagate(i, transition):
+                start = max(0, i - GAME_OVER_STEPS)
+                for j, (exp1, exp2) in enumerate(tm[start:i + 1]):
+                    reward =  -0.3 / (1 + math.exp(-j))  # sigmoid
                     ret.append((
-                        self.atari.substitute_reward_in_experience(exp1, -1),
-                        self.atari.substitute_reward_in_experience(exp2, -1)
+                        self.atari.substitute_reward_in_experience(exp1, reward),
+                        self.atari.substitute_reward_in_experience(exp2, reward)
                     ))
                 # Assume max of one game over per minibatch
                 return tm[:start] + ret + tm[i + 1:]
         return transition_minibatch
+
+    def should_propagate(self, i, transition):
+        return i > GAME_OVER_STEPS and (
+            os.environ.has_key('TEST_NEGATIVE_REWARD_DECAY')
+            or
+            self.atari.get_game_over_from_experience(transition[0]))
 
     def forward_batch(self, transition_minibatch):
         q_gradients = [0.0] * len(actions.ALL)
@@ -137,7 +143,8 @@ class DqnSolver(object):
             vis_square(filters, im_name='conv2', batch=self.start_timestamp)
             del filters
             if self.iter % 15000 == 0:
-                # TODO: Solve memory leak before saving more frequently.
+                # TODO: Solve memory leak before saving more frequently by using
+                # multi-process.
                 self.plot_layers()
 
     def get_layer_state(self):

@@ -10,6 +10,7 @@ EXPERIENCE_WINDOW_SIZE = 4
 
 
 def go():
+    check_for_test_vars()
     start_timestamp = int(time.time())
     log_file_name = get_episode_log_filename(start_timestamp)
     utils.setup_matplotlib()
@@ -38,6 +39,11 @@ def go():
         dqn.iter = i
         print 'dqn iteration: ', i
 
+
+def check_for_test_vars():
+    if os.environ.has_key('TEST_NEGATIVE_REWARD_DECAY') == 'true':
+        print 'YOU ARE TESTING NEGATIVE REWARD DECAY !!!!!!!!!!!!!!!'
+        time.sleep(3)
 
 def get_episode_log_filename(start_timestamp):
     return '%s/data/episodes/episode_log_%d.csv' % (DQN_ROOT, start_timestamp)
