@@ -118,6 +118,8 @@ class DqnSolver(object):
                 improvement = q_values_updated[action_index] - q_old
                 if improvement > 0:
                     pass
+                else:
+                    raise Exception('backprop failed sanity check. is momentum on?')
 
     def process_minibatch(self, transition_batch):
         # self.improvement_check_one(transition_batch)
