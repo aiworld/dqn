@@ -22,15 +22,16 @@ EPSILON_SLOPE = -(1.0 - EPSILON_END) / EPSILON_ANNEALING_TIME
 GAMMA = 0.8  # Using pac-man value.
 MINIBATCH_SIZE = 32
 LEARNING_RATE = 0.6
-GAME_OVER_STEPS = 8
+GAME_OVER_STEPS = 32  # Takes 13 steps for player to die in space invaders. Need to generalize this.
+GET_IMPROVEMENT = False
 
 
 class DqnSolver(object):
-    def __init__(self, atari, net, solver, start_timestamp):
+    def __init__(self, atari, net, solver, start_timestamp, start_iter):
         self.atari           = atari
         self.net             = net
         self.solver          = solver
-        self.iter            = 0
+        self.iter            = start_iter
         self._forced_exploit = False
         self.start_timestamp = start_timestamp
 
@@ -39,20 +40,21 @@ class DqnSolver(object):
             self.atari.get_random_transitions(num=MINIBATCH_SIZE)
         if transition_minibatch:
             transition_minibatch = \
-                self.propagate_game_over_backwards(transition_minibatch)
+                self.extend_game_over_into_past(transition_minibatch)
             return self.process_minibatch(transition_minibatch)
         else:
             return EpisodeStat(0.0, [], 0.0)
 
-    def propagate_game_over_backwards(self, transition_minibatch):
+    def extend_game_over_into_past(self, transition_minibatch):
         ret = []
         tm = transition_minibatch
-        # TODO: Make sure this is not permanently stored.
+
         for i, transition in enumerate(tm):
             if self.should_propagate(i, transition):
+                print 'extending game-over into past'
                 start = max(0, i - GAME_OVER_STEPS)
+                reward = -2.0 / float(GAME_OVER_STEPS)
                 for j, (exp1, exp2) in enumerate(tm[start:i + 1]):
-                    reward =  -0.3 / (1 + math.exp(-j))  # sigmoid
                     ret.append((
                         self.atari.substitute_reward_in_experience(exp1, reward),
                         self.atari.substitute_reward_in_experience(exp2, reward)
@@ -62,10 +64,13 @@ class DqnSolver(object):
         return transition_minibatch
 
     def should_propagate(self, i, transition):
-        return i > GAME_OVER_STEPS and (
+        return i >= (GAME_OVER_STEPS - 1) and (
             os.environ.has_key('TEST_NEGATIVE_REWARD_DECAY')
             or
-            self.atari.get_game_over_from_experience(transition[0]))
+            self.atari.get_game_over_from_experience(transition[0])
+            or
+            self.atari.get_game_over_from_experience(transition[1])
+        )
 
     def forward_batch(self, transition_minibatch):
         q_gradients = [0.0] * len(actions.ALL)
@@ -125,7 +130,10 @@ class DqnSolver(object):
         self.solver.online_update()  # backprop
         layers_after = self.get_layer_state()
         layer_distances = self.get_layer_distances(layers_orig, layers_after)
-        improvement = self.forward_check(q_olds, transition_batch)
+        if GET_IMPROVEMENT:
+            improvement = self.forward_check(q_olds, transition_batch)
+        else:
+            improvement = 0.0
         self.save_graphs()
         return EpisodeStat(improvement, layer_distances,
                            l1_norm(q_gradients))
@@ -184,15 +192,15 @@ class DqnSolver(object):
 
     def forced_exploit(self):
         """Allows manually triggering exploit"""
-        global _forced_exploit
-        if self.iter % 100 == 0:
-            _forced_exploit = os.path.isfile('exploit')
-        return _forced_exploit
+        if self.iter % 1 == 0:
+            self._forced_exploit = os.path.isfile('exploit')
+        return self._forced_exploit
 
     def perceive(self, experience):
         atari = self.atari
         state = atari.get_state_from_experience(experience)
         q_values = self.get_q_values(state)
+        print 'q values: ', q_values
         action_index = self.get_random_q_max_index(q_values)
         return q_values[action_index], actions.ALL.values()[action_index]
 
@@ -219,11 +227,11 @@ class DqnSolver(object):
         exp2_state = atari.get_state_from_experience(exp2)
         exp2_action = atari.get_action_from_experience(exp2)
         q_values_one = self.get_q_values(exp1_state)
-        print 'q values one', q_values_one
+        # print 'q values one', q_values_one
         q_old_action = q_values_one[exp2_action.index]
-        print 'old action', q_old_action
+        # print 'old action', q_old_action
         q_values_two = self.get_q_values(exp2_state)
-        print 'q_values_two', q_values_two
+        # print 'q_values_two', q_values_two
         q_max_index = self.get_random_q_max_index(q_values_two)
         q_max = q_values_two[q_max_index]
         reward, _ = atari.get_reward_from_experience(exp2)
