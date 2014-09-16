@@ -18,6 +18,7 @@ class Solver {
   // in a non-zero iter number to resume training for a pre-trained net.
   virtual void Solve(const char* resume_file = NULL);
   inline void Solve(const string resume_file) { Solve(resume_file.c_str()); }
+  inline void OnlineUpdateSetup(const string resume_file) { OnlineUpdateSetup(resume_file.c_str()); }
   virtual void OnlineUpdateSetup(const char* resume_file = NULL);
   virtual void OnlineUpdate();
   virtual void OnlineForward();

@@ -1,4 +1,5 @@
 import time
+import sys
 import utils
 from atari import Atari
 import atari_actions as actions
@@ -9,19 +10,19 @@ from constants import *
 EXPERIENCE_WINDOW_SIZE = 4
 
 
-def go():
+def go(solver_filename, start_iter):
     check_for_test_vars()
     start_timestamp = int(time.time())
     log_file_name = get_episode_log_filename(start_timestamp)
     utils.setup_matplotlib()
-    solver = utils.get_solver()
+    solver = utils.get_solver(solver_filename)
     net = solver.net
     atari = Atari()
     episode_count = 0
     action = actions.MOVE_RIGHT_AND_FIRE
     episode_stats = EpisodeStats()
-    dqn = DqnSolver(atari, net, solver, start_timestamp)
-    for i in xrange(int(1E7)):  # 10 million training steps
+    dqn = DqnSolver(atari, net, solver, start_timestamp, start_iter)
+    while dqn.iter < xrange(int(1E7)):  # 10 million training steps
         experience = atari.experience(EXPERIENCE_WINDOW_SIZE, action)
         q, action = dqn.perceive(experience)
         exploit = dqn.should_exploit()
@@ -36,8 +37,8 @@ def go():
             episode_stats = EpisodeStats()
             atari.stop()
             atari = Atari()
-        dqn.iter = i
-        print 'dqn iteration: ', i
+        dqn.iter += 1
+        print 'dqn iteration: ', dqn.iter
 
 
 def check_for_test_vars():
@@ -45,11 +46,18 @@ def check_for_test_vars():
         print 'YOU ARE TESTING NEGATIVE REWARD DECAY !!!!!!!!!!!!!!!'
         time.sleep(3)
 
+
 def get_episode_log_filename(start_timestamp):
     return '%s/data/episodes/episode_log_%d.csv' % (DQN_ROOT, start_timestamp)
 
 if __name__ == '__main__':
-    go()
+    _solver_filename = None
+    _start_iter = 0
+    if len(sys.argv) > 1:
+        _solver_filename = sys.argv[1]
+    if len(sys.argv) > 2:
+        _start_iter = int(sys.argv[2])  # For resume.
+    go(_solver_filename, _start_iter)
 
 
 # def set_gradients(i, net, q_max, q_values, action_index, reward):

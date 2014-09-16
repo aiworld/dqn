@@ -11,7 +11,7 @@ import skimage.transform
 #  and visualize each (height, width) thing in a grid of size approx. sqrt(n) by sqrt(n)
 import sys
 import time
-from constants import DQN_ROOT
+from constants import CAFFE_ROOT, DQN_ROOT
 
 
 def vis_square(data, im_name, batch, padsize=1, padval=0):
@@ -67,12 +67,12 @@ def setup_matplotlib():
     plt.rcParams['image.cmap'] = 'gray'
 
 
-def get_solver():
-    caffe_root = '/s/caffe/'
-    sys.path.insert(0, caffe_root + 'python')
-
-    solver_file = caffe_root + 'examples/dqn/data/solver/dqn_solver.prototxt'
+def get_solver(solver_filename):
+    sys.path.insert(0, CAFFE_ROOT + 'python')
+    solver_file = CAFFE_ROOT + 'examples/dqn/data/solver/dqn_solver.prototxt'
     solver = caffe.SGDSolver(solver_file)
+    if solver_filename:
+        solver.online_update_setup_resume(solver_filename)
     solver.online_update_setup()
     return solver
 
