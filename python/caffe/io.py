@@ -30,6 +30,21 @@ def load_image(filename, color=True):
     return img
 
 
+def resize_image_binary(im, new_dims, interp_order=1):
+    """
+    Resize an image array with interpolation.
+
+    Take
+    im: (H x W x K) ndarray
+    new_dims: (height, width) tuple of new dimensions.
+    interp_order: interpolation order, default is linear.
+
+    Give
+    im: resized ndarray with shape (new_dims[0], new_dims[1], K)
+    """
+    return skimage.transform.resize(im, new_dims, order=interp_order)
+
+
 def resize_image(im, new_dims, interp_order=1):
     """
     Resize an image array with interpolation.

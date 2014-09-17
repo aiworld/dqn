@@ -49,7 +49,7 @@ def save_image(im, im_name, batch):
 def load_stacked_frames_from_disk(filename):
     im = skimage.img_as_float(skimage.io.imread(filename)).astype(np.float32)
     im = rgb2gray(im)
-    im = caffe.io.resize_image(im, (84, 84))
+    im = caffe.io.resize_image_binary(im, (84, 84))
 
     if False:
         plt.imshow(im, cmap = plt.get_cmap('gray'))

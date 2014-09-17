@@ -98,8 +98,8 @@ void Solver<Dtype>::InitTestNets() {
       CHECK_GE(param_.test_iter_size(), num_test_nets)
           << "test_iter must be specified for each test network.";
   } else {
-      CHECK_EQ(param_.test_iter_size(), num_test_nets)
-          << "test_iter must be specified for each test network.";
+//      CHECK_EQ(param_.test_iter_size(), num_test_nets)
+//          << "test_iter must be specified for each test network.";
   }
   // If we have a generic net (specified by net or net_param, rather than
   // test_net or test_net_param), we may have an unlimited number of actual
@@ -287,9 +287,9 @@ void Solver<Dtype>::OnlineUpdate() {
   // should be given, and we will just provide dummy vecs.
   //  Dtype loss = net_->ForwardBackward(bottom_vec);
 
-  if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
-    TestAll();
-  }
+//  if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
+//    TestAll();
+//  }
 
   const bool display = param_.display() && iter_ % param_.display() == 0;
   net_->set_debug_info(display && param_.debug_info());
