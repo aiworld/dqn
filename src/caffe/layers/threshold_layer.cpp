@@ -1,5 +1,3 @@
-// Copyright 2014 BVLC and contributors.
-
 #include <vector>
 
 #include "caffe/layer.hpp"
@@ -26,6 +24,10 @@ Dtype ThresholdLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   }
   return Dtype(0);
 }
+
+#ifdef CPU_ONLY
+STUB_GPU_FORWARD(ThresholdLayer, Forward);
+#endif
 
 INSTANTIATE_CLASS(ThresholdLayer);
 

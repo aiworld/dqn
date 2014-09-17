@@ -1,10 +1,8 @@
-// Copyright 2014 BVLC and contributors.
-
 #include <vector>
 
 #include "caffe/layer.hpp"
-#include "caffe/vision_layers.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/vision_layers.hpp"
 
 namespace caffe {
 
@@ -36,12 +34,12 @@ Dtype EltwiseLayer<Dtype>::Forward_gpu(
 
 template <typename Dtype>
 void EltwiseLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
-    const bool propagate_down, vector<Blob<Dtype>*>* bottom) {
-  if (propagate_down) {
-    const int count = top[0]->count();
-    const Dtype* top_data = top[0]->gpu_data();
-    const Dtype* top_diff = top[0]->gpu_diff();
-    for (int i = 0; i < bottom->size(); ++i) {
+    const vector<bool>& propagate_down, vector<Blob<Dtype>*>* bottom) {
+  const int count = top[0]->count();
+  const Dtype* top_data = top[0]->gpu_data();
+  const Dtype* top_diff = top[0]->gpu_diff();
+  for (int i = 0; i < bottom->size(); ++i) {
+    if (propagate_down[i]) {
       const Dtype* bottom_data = (*bottom)[i]->gpu_data();
       Dtype* bottom_diff = (*bottom)[i]->mutable_gpu_diff();
       switch (op_) {
@@ -51,7 +49,7 @@ void EltwiseLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
         break;
       case EltwiseParameter_EltwiseOp_SUM:
         if (coeffs_[i] == Dtype(1.)) {
-          caffe_gpu_copy(count, top_diff, bottom_diff);
+          caffe_copy(count, top_diff, bottom_diff);
         } else {
           caffe_gpu_scale(count, coeffs_[i], top_diff, bottom_diff);
         }

@@ -1,20 +1,15 @@
-// Copyright 2014 BVLC and contributors.
-
 #include <vector>
 
 #include "caffe/layer.hpp"
-#include "caffe/vision_layers.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/vision_layers.hpp"
 
 namespace caffe {
 
 template <typename Dtype>
 void EltwiseLayer<Dtype>::SetUp(const vector<Blob<Dtype>*>& bottom,
       vector<Blob<Dtype>*>* top) {
-  CHECK_GE(bottom.size(), 2) <<
-      "Eltwise Layer takes at least 2 blobs as input.";
-  CHECK_EQ(top->size(), 1) <<
-      "Eltwise Layer takes a single blob as output.";
+  Layer<Dtype>::SetUp(bottom, top);
   CHECK(this->layer_param().eltwise_param().coeff_size() == 0
       || this->layer_param().eltwise_param().coeff_size() == bottom.size()) <<
       "Eltwise Layer takes one coefficient per bottom blob.";
@@ -70,12 +65,12 @@ Dtype EltwiseLayer<Dtype>::Forward_cpu(
 
 template <typename Dtype>
 void EltwiseLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
-    const bool propagate_down, vector<Blob<Dtype>*>* bottom) {
-  if (propagate_down) {
-    const int count = top[0]->count();
-    const Dtype* top_data = top[0]->cpu_data();
-    const Dtype* top_diff = top[0]->cpu_diff();
-    for (int i = 0; i < bottom->size(); ++i) {
+    const vector<bool>& propagate_down, vector<Blob<Dtype>*>* bottom) {
+  const int count = top[0]->count();
+  const Dtype* top_data = top[0]->cpu_data();
+  const Dtype* top_diff = top[0]->cpu_diff();
+  for (int i = 0; i < bottom->size(); ++i) {
+    if (propagate_down[i]) {
       const Dtype* bottom_data = (*bottom)[i]->cpu_data();
       Dtype* bottom_diff = (*bottom)[i]->mutable_cpu_diff();
       switch (op_) {
@@ -96,6 +91,10 @@ void EltwiseLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     }
   }
 }
+
+#ifdef CPU_ONLY
+STUB_GPU(EltwiseLayer);
+#endif
 
 INSTANTIATE_CLASS(EltwiseLayer);
 

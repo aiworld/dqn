@@ -27,7 +27,9 @@
 *.mex*
 
 # build, distribute, and bins
-build/*
+build
+.build_debug/*
+.build_release/*
 distribute/*
 *.testbin
 *.bin
@@ -52,6 +54,7 @@ data/*
 
 # Generated documentation
 docs/_site
+docs/gathered
 _site
 
 # Sublime Text settings
