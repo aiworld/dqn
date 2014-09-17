@@ -363,7 +363,6 @@ BOOST_PYTHON_MODULE(_caffe) {
       .def("solve",                      &CaffeSGDSolver::Solve)
       .def("online_update",              &CaffeSGDSolver::OnlineUpdate)
       .def("online_forward",             &CaffeSGDSolver::OnlineForward)
-      .def("online_forward",             &CaffeSGDSolver::OnlineForward)
       .def("online_update_setup",        &CaffeSGDSolver::OnlineUpdateSetup)
       .def("online_update_setup_resume", &CaffeSGDSolver::OnlineUpdateSetupResume)
       .def("solve",                      &CaffeSGDSolver::SolveResume);

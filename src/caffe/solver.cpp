@@ -172,7 +172,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   }
   // Remember the initial iter_ value; will be non-zero if we loaded from a
   // resume_file above.
-  const int start_iter = iter_;
+  start_iter = iter_;
 
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
@@ -220,11 +220,13 @@ void Solver<Dtype>::Solve(const char* resume_file) {
 
 template <typename Dtype>
 void Solver<Dtype>::OnlineUpdateSetup(const char* resume_file) {
-  Caffe::set_mode(Caffe::Brew(param_.solver_mode()));
-  if (param_.solver_mode() == SolverParameter_SolverMode_GPU &&
-      param_.has_device_id()) {
-    Caffe::SetDevice(param_.device_id());
-  }
+  // CQ: Split from Solve because we need to be able to set the input
+  // of the memory data layer, determine the q-loss in python, then
+  // optionally backprop depending on whether we are training or just acting.
+  // So Solve is split into:
+  // OnlineUpdateSetup
+  // OnlineForward
+  // OnlineUpdate
   Caffe::set_phase(Caffe::TRAIN);
   LOG(INFO) << "Online update for " << net_->name();
   PreSolve();
@@ -235,58 +237,71 @@ void Solver<Dtype>::OnlineUpdateSetup(const char* resume_file) {
     Restore(resume_file);
   }
 
-  LOG(INFO) << "and the test interval is " << param_.test_interval();
+  // Remember the initial iter_ value; will be non-zero if we loaded from a
+  // resume_file above.
+  start_iter = iter_;
 
-  // Run a test pass before doing any training to avoid waiting a potentially
-  // very long time (param_.test_interval() training iterations) to report that
-  // there's not enough memory to run the test net and crash, etc.; and to gauge
-  // the effect of the first training iterations.
-  if (param_.test_interval()) {
-    TestAll();
-  }
+  LOG(INFO) << "and the test interval is " << param_.test_interval();
 }
 
 template <typename Dtype>
 void Solver<Dtype>::OnlineForward() {
   // CQ: Split from Solve because we need to be able to set the input
-  // of the memory data layer between every iteration.
+  // of the memory data layer, determine the q-loss in python, then
+  // optionally backprop depending on whether we are training or just acting.
+  // So Solve is split into:
+  // OnlineUpdateSetup
+  // OnlineForward
+  // OnlineUpdate
 
-  // For a network that is trained by the solver, no bottom or top vecs
-  // should be given, and we will just provide dummy vecs.
+  // This replaces for-loop increment in batch solve.
   iter_++;
 
-  vector<Blob<Dtype>*> bottom_vec; // CQ: shared ptr?
+  vector<Blob<Dtype>*> bottom_vec; // CQ: shared ptr? dummy vec?
 
   Dtype loss;
   net_->Forward(bottom_vec, &loss);
 
+  const bool display = param_.display() && iter_ % param_.display() == 0;
+  if (display) {
+    LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+  }
+
+  // Craig Notes:
   // Net forward returns loss via side effect.
   // Layer forward directly returns 0 unless a loss layer.
-  // Figure out Euclidean loss, is this a derivative?
-  // Implement a Q-loss layer.
-  // Then gradients are computed backward from the loss.
+  // Euclidean loss, forward does loss, backprop computes derivative.
 }
 
 template <typename Dtype>
 void Solver<Dtype>::OnlineUpdate() {
-  // Split from Solve because we need to be able to set the input
-  // of the memory data layer between every iteration.
+  // CQ: Split from Solve because we need to be able to set the input
+  // of the memory data layer, determine the q-loss in python, then
+  // optionally backprop depending on whether we are training or just acting.
+  // So Solve is split into:
+  // OnlineUpdateSetup
+  // OnlineForward
+  // OnlineUpdate
 
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
-//  Dtype loss = net_->ForwardBackward(bottom_vec);
-  net_->Backward();
-  ComputeUpdateValue();
-  net_->Update();
+  //  Dtype loss = net_->ForwardBackward(bottom_vec);
 
-//  if (param_.display() && iter_ % param_.display() == 0) {
-//    LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
-//  }
   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
     TestAll();
   }
-  // Check if we need to do snapshot
-  if (param_.snapshot() && iter_ % param_.snapshot() == 0) {
+
+  const bool display = param_.display() && iter_ % param_.display() == 0;
+  net_->set_debug_info(display && param_.debug_info());
+
+  net_->Backward();
+
+  ComputeUpdateValue();
+  net_->Update();
+
+  // Save a snapshot if needed.
+  if (param_.snapshot() && iter_ > start_iter &&
+      iter_ % param_.snapshot() == 0) {
     Snapshot();
   }
 }
