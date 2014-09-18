@@ -263,9 +263,10 @@ void Solver<Dtype>::OnlineForward() {
   net_->Forward(bottom_vec, &loss);
 
   const bool display = param_.display() && iter_ % param_.display() == 0;
-  if (display) {
-    LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
-  }
+
+//  if (display) {
+//    LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+//  }
 
   // Craig Notes:
   // Net forward returns loss via side effect.
@@ -450,9 +451,9 @@ void SGDSolver<Dtype>::ComputeUpdateValue() {
   vector<float>& net_params_weight_decay = this->net_->params_weight_decay();
   // get the learning rate
   Dtype rate = GetLearningRate();
-  if (this->param_.display() && this->iter_ % this->param_.display() == 0) {
-    LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
-  }
+//  if (this->param_.display() && this->iter_ % this->param_.display() == 0) {
+//    LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
+//  }
   Dtype momentum = this->param_.momentum();
   Dtype weight_decay = this->param_.weight_decay();
   switch (Caffe::mode()) {

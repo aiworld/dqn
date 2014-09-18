@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import caffe
 import numpy as np
 import os
+import sys
 import atari_actions as actions
 from utils import vis_square, get_image_path, l1_norm
 from constants import LAYER_NAMES
@@ -169,8 +170,9 @@ class DqnSolver(object):
             dist = distance.euclidean(layers_orig[i][1],
                                       layers_after[i][1])
             layer_name = layers_orig[i][0]
-            print layer_name, 'distance: ', dist
+            sys.stdout.write(layer_name + ' distance: ' + str(dist) + ' ')
             ret.append((layer_name, dist))
+        print ''
         return ret
 
     def set_gradients_on_caffe_net(self, q_gradients):

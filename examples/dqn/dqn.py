@@ -9,7 +9,6 @@ from constants import *
 
 EXPERIENCE_WINDOW_SIZE = 4
 
-
 def go(solver_filename, start_iter):
     check_for_test_vars()
     start_timestamp = int(time.time())
@@ -17,8 +16,10 @@ def go(solver_filename, start_iter):
     utils.setup_matplotlib()
     solver = utils.get_solver(solver_filename)
     net = solver.net
-    atari = Atari()
+    experience_dir_name = get_experience_dir_name(start_timestamp)
+    os.makedirs(experience_dir_name)
     episode_count = 0
+    atari = Atari(experience_dir_name, episode_count)
     action = actions.MOVE_RIGHT_AND_FIRE
     episode_stats = EpisodeStats()
     dqn = DqnSolver(atari, net, solver, start_timestamp, start_iter)
@@ -36,7 +37,7 @@ def go(solver_filename, start_iter):
             episode_count += 1
             episode_stats = EpisodeStats()
             atari.stop()
-            atari = Atari()
+            atari = Atari(experience_dir_name, episode_count)
         dqn.iter += 1
         print 'dqn iteration: ', dqn.iter
 
@@ -47,8 +48,16 @@ def check_for_test_vars():
         time.sleep(3)
 
 
+def get_episode_dir():
+    return '%s/data/%s' % (DQN_ROOT, EPISODE_DIR_NAME)
+
+
 def get_episode_log_filename(start_timestamp):
-    return '%s/data/episodes/episode_log_%d.csv' % (DQN_ROOT, start_timestamp)
+    return '%s/episode_log_%d.csv' % (get_episode_dir(), start_timestamp)
+
+
+def get_experience_dir_name(start_timestamp):
+    return '%s/experiences_%d'     % (get_episode_dir(), start_timestamp)
 
 if __name__ == '__main__':
     _solver_filename = None
