@@ -1,3 +1,3 @@
 #!/bin/bash
 
-zip $1.zip $1 && rm $1
+cd $1 && zip $2.zip $2 && rm "$1/$2"
