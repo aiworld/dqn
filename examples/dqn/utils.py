@@ -73,7 +73,8 @@ def get_solver(solver_filename):
     solver = caffe.SGDSolver(solver_file)
     if solver_filename:
         solver.online_update_setup_resume(solver_filename)
-    solver.online_update_setup()
+    else:
+        solver.online_update_setup()
     return solver
 
 
