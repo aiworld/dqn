@@ -9,6 +9,7 @@ from constants import *
 
 EXPERIENCE_WINDOW_SIZE = 4
 
+
 def go(solver_filename, start_iter):
     check_for_test_vars()
     start_timestamp = int(time.time())

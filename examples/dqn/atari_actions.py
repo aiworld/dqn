@@ -44,7 +44,8 @@ for i, a in enumerate([FIRE, MOVE_RIGHT_AND_FIRE, MOVE_LEFT_AND_FIRE]):
     ALL[a.name] = a
 
 if __name__ == '__main__':
-    print ALL
+    for k, action in ALL.iteritems():
+        print k, action, action.index
 
 
 def get_random_action():
