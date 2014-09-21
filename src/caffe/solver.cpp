@@ -264,14 +264,16 @@ void Solver<Dtype>::OnlineForward() {
 
   const bool display = param_.display() && iter_ % param_.display() == 0;
 
-//  if (display) {
-//    LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
-//  }
-
   // Craig Notes:
   // Net forward returns loss via side effect.
   // Layer forward directly returns 0 unless a loss layer.
   // Euclidean loss, forward does loss, backprop computes derivative.
+
+    // Save a snapshot if needed.
+  if (param_.snapshot() && iter_ > start_iter &&
+    iter_ % param_.snapshot() == 0) {
+    Snapshot();
+  }
 }
 
 template <typename Dtype>
@@ -299,12 +301,6 @@ void Solver<Dtype>::OnlineUpdate() {
 
   ComputeUpdateValue();
   net_->Update();
-
-  // Save a snapshot if needed.
-  if (param_.snapshot() && iter_ > start_iter &&
-      iter_ % param_.snapshot() == 0) {
-    Snapshot();
-  }
 }
 
 

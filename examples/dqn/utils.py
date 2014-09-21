@@ -88,3 +88,20 @@ def l1_norm(v):
 def repeat(func, times):
     for _ in itertools.repeat(None, times):
         func()
+
+
+def check_pid(pid):
+    """ Check For the existence of a unix pid. """
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    else:
+        return True
+
+
+def close_named_pipe(pipe):
+    pipe.flush()
+    pipe.close()
+    while not pipe.closed:
+        time.sleep(0.01)  # 10 millis
