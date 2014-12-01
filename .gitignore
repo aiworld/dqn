@@ -66,3 +66,5 @@ _site
 *.iml
 *.iws
 
+*/secrets.py
+

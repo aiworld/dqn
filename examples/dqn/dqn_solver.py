@@ -132,14 +132,15 @@ class DqnSolver(object):
         layers_orig = self.get_layer_state()
         self.solver.online_update()  # backprop
         layers_after = self.get_layer_state()
+        # TODO: Remove or reduce frequency of distance calculation to speed up training.
         layer_distances = self.get_layer_distances(layers_orig, layers_after)
         if GET_IMPROVEMENT:
             improvement = self.forward_check(q_olds, transition_batch)
         else:
             improvement = 0.0
         self.save_graphs()
-        return EpisodeStat(improvement, layer_distances,
-                           l1_norm(q_gradients))
+        # TODO: Remove or reduce frequency of gradient l1 norm calculation to speed up training.
+        return EpisodeStat(improvement, layer_distances, l1_norm(q_gradients))
 
     def save_graphs(self):
         if self.iter % 150 == 0:
