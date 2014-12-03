@@ -9,7 +9,7 @@ test_iter: 1
 test_interval: 1
 
 # The base learning rate, momentum and the weight decay of the network.
-base_lr: 0.001
+base_lr: 0.01
 momentum: 0.9
 weight_decay: 0.0005
 
@@ -26,7 +26,7 @@ display: 1
 max_iter: 450000
 
 # snapshot intermediate results in database.
-snapshot: 10000
+snapshot: 100000
 snapshot_prefix: "caffe_dqn_train"
 
 # solver mode: CPU or GPU
