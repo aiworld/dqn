@@ -20,7 +20,7 @@ def go(solver_filename, start_iter):
     frame_dir_name = get_frame_dir_name(start_timestamp)
     os.makedirs(frame_dir_name)
     episode_count = 0
-    atari = Atari(frame_dir_name, episode_count, start_timestamp)
+    atari = Atari(frame_dir_name, episode_count, start_timestamp, show_game())
     action = actions.MOVE_RIGHT_AND_FIRE
     episode_stats = EpisodeStats()
     dqn = DqnSolver(atari, net, solver, start_timestamp, start_iter)
@@ -40,9 +40,23 @@ def go(solver_filename, start_iter):
             atari.stop()
             if 'TEST_AFTER_GAME' in os.environ:
                 return
-            atari = Atari(frame_dir_name, episode_count, start_timestamp)
+            atari = Atari(frame_dir_name, episode_count, start_timestamp,
+                          show_game())
         dqn.iter += 1
         print 'dqn iteration: ', dqn.iter
+
+
+def show_game():
+    if os.path.isfile(DQN_ROOT + 'show-game'):
+        return True
+    else:
+        return False
+
+def forced(self):
+    """Allows manually triggering exploit"""
+    if self.iter % 1 == 0:
+        self._forced_exploit = os.path.isfile('exploit')
+    return self._forced_exploit
 
 
 def check_for_test_vars():

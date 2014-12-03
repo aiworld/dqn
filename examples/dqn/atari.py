@@ -19,6 +19,7 @@ import utils
 from ntsc_palette import NTSCPalette
 from create_action_sidebar import ActionSidebarImages
 import secrets
+import atari_actions
 
 EXP_IMAGE_ACTION_INDEX = 0
 EXP_ACTION_INDEX       = 1
@@ -28,11 +29,15 @@ EXP_SCREEN_HEX_INDEX   = 4
 
 MAX_HISTORY_LENGTH = 1000000
 
-experience_pairs = deque(maxlen=MAX_HISTORY_LENGTH)
+EXPERIENCE_PAIRS = deque(maxlen=MAX_HISTORY_LENGTH)
 
 
 class Atari(object):
     def __init__(self, log_dir_name, episode_num, start_timestamp, show=False):
+        if INTEGRATE_HUMAN_FEEDBACK:
+            self.experience_pairs = self.get_random_feedback()
+        else:
+            self.experience_pairs = EXPERIENCE_PAIRS
         self.log_dir_name = log_dir_name
         self.episode_num = episode_num
         self.start_timestamp = start_timestamp
@@ -62,10 +67,14 @@ class Atari(object):
         ale_bin_file = "ale"
         rom_file = 'space_invaders.bin'
         # Run A.L.E
+        if self.show:
+            show_arg = 'true'
+        else:
+            show_arg = 'false'
         args = [
             ale_location + ale_bin_file,
             '-run_length_encoding', 'false',
-            '-display_screen',      'true',
+            '-display_screen',      show_arg,
             '-game_controller',     'fifo_named',
             '-frame_skip',          '3',  # TODO: Change to 4 for other games per dqn paper.
             rom_location + rom_file
@@ -73,12 +82,24 @@ class Atari(object):
         self.check_memory()
         return subprocess.Popen(args, cwd='/s/ale_0.4.4/ale_0_4/', close_fds=True)
 
+    def get_random_feedback(self):
+        pairs = []
+        for _ in xrange(2):
+            pairs += integrate_feedback.get_random_experience_pairs()
+        ret = deque()
+        for pair in pairs:
+            if len(pair) != 2:
+                print pair
+            e1, e2 = pair
+            ret.append([self.deserialize(e1), self.deserialize(e2)])
+        return ret
+
     def check_memory(self):
         if psutil.phymem_usage().percent > 90:
-            trim = int(len(experience_pairs) / 2.0)
+            trim = int(len(self.experience_pairs) / 2.0)
             for _ in xrange(trim):
                 try:
-                    experience_pairs.popleft()
+                    self.experience_pairs.popleft()
                 except Exception, e:
                     import traceback
                     print e
@@ -100,9 +121,7 @@ class Atari(object):
         while utils.check_pid(pid):
             print 'waiting for game to die'
             time.sleep(0.01)  # 10 millis
-        if INTEGRATE_HUMAN_FEEDBACK:
-            integrate_feedback.populate_experience_pairs(experience_pairs)
-        else:
+        if not INTEGRATE_HUMAN_FEEDBACK:
             # We've already recorded this game if we are integrating feedback.
             self.log_frames()  # Keep this at end to avoid stalling atari close.
 
@@ -137,9 +156,9 @@ class Atari(object):
         self.write("%d,%d\n" % (action.value, 18))  # 18 = Noop player b.
 
     def get_random_transitions(self, num):
-        if len(experience_pairs) > num:
-            i = random.randint(0, len(experience_pairs) - num)
-            return list(itertools.islice(experience_pairs, i, i + num))
+        if len(self.experience_pairs) > num:
+            i = random.randint(0, len(self.experience_pairs) - num)
+            return list(itertools.islice(self.experience_pairs, i, i + num))
         else:
             return []
     #
@@ -168,7 +187,7 @@ class Atari(object):
         self.recording.append(frames)
         if self.previous_experience:
             experience_pair = (self.previous_experience, ret)
-            experience_pairs.append(experience_pair)
+            self.experience_pairs.append(experience_pair)
             # if self.record_rewarding:
             # self.record_rewarding_experience(experience_pair, total_reward)
         self.previous_experience = ret
@@ -196,6 +215,18 @@ class Atari(object):
                 'reward'       : frame[EXP_REWARD_INDEX],
                 'screen_hex'   : frame[EXP_SCREEN_HEX_INDEX]
             })
+        return ret
+
+    def deserialize(self, frames):
+        ret = []
+        for exp in frames:
+            r = [None] * 5
+            r[EXP_IMAGE_ACTION_INDEX] =                   exp['image_action']
+            r[EXP_ACTION_INDEX]       = atari_actions.ALL[exp['action']]
+            r[EXP_GAME_OVER_INDEX]    =                   exp['game_over']
+            r[EXP_REWARD_INDEX]       =                   exp['reward']
+            r[EXP_SCREEN_HEX_INDEX]   =                   exp['screen_hex']
+            ret.append(r)
         return ret
 
     def zip_and_delete(self):

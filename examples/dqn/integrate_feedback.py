@@ -1,12 +1,12 @@
 # [x] download s3 files
 # [x] download firebase votes for each episode
 # [x] integrate reward into experiences
-# [-] populate experience pairs with human labeled experiences (TODO(now): Store result)
-# [ ] run as normal, except don't overwrite experiences
-from collections import deque
+# [x] populate experience pairs with human labeled experiences
+# [x] run as normal, except don't overwrite experiences
 import json
 import os
 import psutil
+import random
 
 from boto.s3.connection import S3Connection
 from constants import DQN_ROOT, VOTE_URL, FIREBASE_URL
@@ -81,24 +81,26 @@ def combine(votes, episode_data):
     return frames
 
 
-def get_experience_pairs():
-    total = 0
-    pairs = deque()
-    for file in os.listdir(INTEGRATE_DIR):
-        mem_pct = psutil.phymem_usage().percent
-        if not file.startswith('.') and mem_pct < 80:
-            print 'file:', file
-            print 'mem %:', mem_pct
-            with gzip.GzipFile(INTEGRATE_DIR + file, 'r', 6) as fdata:
-                experiences = json.loads(fdata.read())
-                exp_len = len(experiences)
-                total += exp_len
-                print 'len:', total
-                for i in xrange(0, exp_len, 2):
-                    pairs.append(experiences[i: i + 2])
-
-    return pairs
+def get_random_experience_pairs():
+    pairs = []
+    file = random.choice(os.listdir(INTEGRATE_DIR))
+    if not file.startswith('.'):
+        print 'integrate file:', file
+        with gzip.GzipFile(INTEGRATE_DIR + file, 'r', 6) as fdata:
+            experiences = json.loads(fdata.read())
+            exp_len = len(experiences)
+            print 'pairs len:', exp_len
+            for i in xrange(0, exp_len, 2):
+                pair = experiences[i: i + 2]
+                if len(pair) != 2:
+                    print 'pair not right:', file, i
+                else:
+                    pairs.append(pair)
+    if not pairs:
+        return get_random_experience_pairs()
+    else:
+        return pairs
 
 if __name__ == '__main__':
     # store_integrated_experiences()
-    get_experience_pairs()
+    get_random_experience_pairs()
