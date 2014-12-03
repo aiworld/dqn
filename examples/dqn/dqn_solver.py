@@ -25,6 +25,7 @@ MINIBATCH_SIZE = 32
 LEARNING_RATE = 0.6
 GAME_OVER_STEPS = 32  # Takes 13 steps for player to die in space invaders. Need to generalize this.
 GET_IMPROVEMENT = False
+MAX_MINIBATCH_REWARD = 2.0
 
 
 class DqnSolver(object):
@@ -42,23 +43,25 @@ class DqnSolver(object):
         if transition_minibatch:
             transition_minibatch = \
                 self.extend_game_over_into_past(transition_minibatch)
+            transition_minibatch = self.limit_rewards(transition_minibatch)
             return self.process_minibatch(transition_minibatch)
         else:
             return EpisodeStat(0.0, [], 0.0)
 
     def extend_game_over_into_past(self, transition_minibatch):
-        ret = []
+        ret = [] # Copy so we don't corrupt future runs.
         tm = transition_minibatch
+        atari = self.atari
 
         for i, transition in enumerate(tm):
             if self.should_propagate(i, transition):
                 print 'extending game-over into past'
                 start = max(0, i - GAME_OVER_STEPS)
-                reward = -2.0 / float(GAME_OVER_STEPS)
+                reward = - MAX_MINIBATCH_REWARD / float(GAME_OVER_STEPS)
                 for j, (exp1, exp2) in enumerate(tm[start:i + 1]):
                     ret.append((
-                        self.atari.substitute_reward_in_experience(exp1, reward),
-                        self.atari.substitute_reward_in_experience(exp2, reward)
+                        atari.substitute_reward_in_experience(exp1, reward),
+                        atari.substitute_reward_in_experience(exp2, reward)
                     ))
                 # Assume max of one game over per minibatch
                 return tm[:start] + ret + tm[i + 1:]
@@ -88,6 +91,36 @@ class DqnSolver(object):
             q_new = LEARNING_RATE * (reward + GAMMA * q_max)
             q_gradients[action_index] += q_old - q_new
         return q_gradients, q_max_sum, q_sum, q_olds
+
+    def limit_rewards(self, transition_minibatch):
+        """
+        Get the total reward for minibatch
+        If reward positive, divide among positives, zero out negatives
+        If negative, divide among negatives, zero positives
+        :param transition_minibatch:
+        :return: copy of transition_minibatch with rewards limited to a max
+        total reward across the minibatch. Only dominant reward across minibatch
+        (positive or negative) will be used.
+        """
+        ret = []  # Copy so we don't corrupt future runs.
+        atari = self.atari
+        total_reward = 0
+        for pair in transition_minibatch:
+            total_reward += self.get_reward_from_experience_pair(pair)
+        length = float(len(transition_minibatch))
+        for pair in transition_minibatch:
+            old_reward = self.get_reward_from_experience_pair(pair)
+            new_reward = 0.0
+            if old_reward > 0 and total_reward > 0:
+                new_reward =  MAX_MINIBATCH_REWARD / length
+            elif old_reward < 0 and total_reward < 0:
+                new_reward = -MAX_MINIBATCH_REWARD / length
+            exp1, exp2 = pair
+            ret.append([
+                atari.substitute_reward_in_experience(exp1, new_reward),
+                atari.substitute_reward_in_experience(exp2, new_reward)
+            ])
+        return ret
 
     def forward_check(self, q_olds, transition_minibatch):
         """Sanity check that we are moving in the right direction"""
@@ -132,14 +165,15 @@ class DqnSolver(object):
         layers_orig = self.get_layer_state()
         self.solver.online_update()  # backprop
         layers_after = self.get_layer_state()
+        # TODO: Remove or reduce frequency of distance calculation to speed up training.
         layer_distances = self.get_layer_distances(layers_orig, layers_after)
         if GET_IMPROVEMENT:
             improvement = self.forward_check(q_olds, transition_batch)
         else:
             improvement = 0.0
         self.save_graphs()
-        return EpisodeStat(improvement, layer_distances,
-                           l1_norm(q_gradients))
+        # TODO: Remove or reduce frequency of gradient l1 norm calculation to speed up training.
+        return EpisodeStat(improvement, layer_distances, l1_norm(q_gradients))
 
     def save_graphs(self):
         if self.iter % 150 == 0:
@@ -232,15 +266,20 @@ class DqnSolver(object):
         exp2_action = atari.get_action_from_experience(exp2)
         q_values_one = self.get_q_values(exp1_state)
         # print 'q values one', q_values_one
-        q_old_action = q_values_one[exp2_action.index]
+        # q_old_action = q_values_one[exp2_action.index]
         # print 'old action', q_old_action
         q_values_two = self.get_q_values(exp2_state)
         # print 'q_values_two', q_values_two
         q_max_index = self.get_random_q_max_index(q_values_two)
         q_max = q_values_two[q_max_index]
-        reward, _ = atari.get_reward_from_experience(exp2)
+        reward = self.get_reward_from_experience_pair(experience_pair)
         # state(exp1) -> action(exp2) -> reward(exp2)
         return q_max, q_values_one, exp2_action.index, reward
+
+    def get_reward_from_experience_pair(self, pair):
+        _, exp2 = pair
+        reward, _ = self.atari.get_reward_from_experience(exp2)
+        return reward
 
     def plot_layers(self):
         net = self.net

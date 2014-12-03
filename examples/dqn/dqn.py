@@ -17,10 +17,10 @@ def go(solver_filename, start_iter):
     utils.setup_matplotlib()
     solver = utils.get_solver(solver_filename)
     net = solver.net
-    experience_dir_name = get_experience_dir_name(start_timestamp)
-    os.makedirs(experience_dir_name)
+    frame_dir_name = get_frame_dir_name(start_timestamp)
+    os.makedirs(frame_dir_name)
     episode_count = 0
-    atari = Atari(experience_dir_name, episode_count)
+    atari = Atari(frame_dir_name, episode_count, start_timestamp, show_game())
     action = actions.MOVE_RIGHT_AND_FIRE
     episode_stats = EpisodeStats()
     dqn = DqnSolver(atari, net, solver, start_timestamp, start_iter)
@@ -33,18 +33,34 @@ def go(solver_filename, start_iter):
         episode_stat = dqn.learn_from_experience_replay()
         dqn.record_episode_stats(episode_stats, experience, q, action, exploit,
                                  episode_stat)
-        if atari.game_over:
+        if atari.game_over or 'TEST_AFTER_GAME' in os.environ:
             EpisodeStats.log_csv(episode_count, episode_stats, log_file_name)
             episode_count += 1
             episode_stats = EpisodeStats()
             atari.stop()
-            atari = Atari(experience_dir_name, episode_count)
+            if 'TEST_AFTER_GAME' in os.environ:
+                return
+            atari = Atari(frame_dir_name, episode_count, start_timestamp,
+                          show_game())
         dqn.iter += 1
         print 'dqn iteration: ', dqn.iter
 
 
+def show_game():
+    if os.path.isfile(DQN_ROOT + 'show-game'):
+        return True
+    else:
+        return False
+
+def forced(self):
+    """Allows manually triggering exploit"""
+    if self.iter % 1 == 0:
+        self._forced_exploit = os.path.isfile('exploit')
+    return self._forced_exploit
+
+
 def check_for_test_vars():
-    if os.environ.has_key('TEST_NEGATIVE_REWARD_DECAY') == 'true':
+    if 'TEST_NEGATIVE_REWARD_DECAY' in os.environ:
         print 'YOU ARE TESTING NEGATIVE REWARD DECAY !!!!!!!!!!!!!!!'
         time.sleep(3)
 
@@ -57,8 +73,8 @@ def get_episode_log_filename(start_timestamp):
     return '%s/episode_log_%d.csv' % (get_episode_dir(), start_timestamp)
 
 
-def get_experience_dir_name(start_timestamp):
-    return '%s/experiences_%d'     % (get_episode_dir(), start_timestamp)
+def get_frame_dir_name(start_timestamp):
+    return '%s/frames_%d'     % (get_episode_dir(), start_timestamp)
 
 if __name__ == '__main__':
     _solver_filename = None
