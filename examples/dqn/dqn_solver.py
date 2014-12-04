@@ -10,7 +10,7 @@ import os
 import sys
 import atari_actions as actions
 from utils import vis_square, get_image_path, l1_norm
-from constants import LAYER_NAMES
+from constants import LAYER_NAMES, INTEGRATE_HUMAN_FEEDBACK
 from episode_stats import EpisodeStat
 
 
@@ -41,9 +41,11 @@ class DqnSolver(object):
         transition_minibatch = \
             self.atari.get_random_transitions(num=MINIBATCH_SIZE)
         if transition_minibatch:
-            transition_minibatch = \
-                self.extend_game_over_into_past(transition_minibatch)
-            transition_minibatch = self.limit_rewards(transition_minibatch)
+            if INTEGRATE_HUMAN_FEEDBACK:
+                transition_minibatch = self.limit_rewards(transition_minibatch)
+            else:
+                transition_minibatch = \
+                    self.extend_game_over_into_past(transition_minibatch)
             return self.process_minibatch(transition_minibatch)
         else:
             return EpisodeStat(0.0, [], 0.0)
@@ -96,30 +98,39 @@ class DqnSolver(object):
         """
         Get the total reward for minibatch
         If reward positive, divide among positives, zero out negatives
-        If negative, divide among negatives, zero positives
+        If negative, divide among negatives, zero positives.
+        This became necessary after combining the crowdsourced rewards from
+        several people.
         :param transition_minibatch:
         :return: copy of transition_minibatch with rewards limited to a max
         total reward across the minibatch. Only dominant reward across minibatch
         (positive or negative) will be used.
         """
+        # TODO: Train on one session at a time -----------------
+        # We should not combine votes for game,
+        # but rather train on one session at a time.
+        # This would allow a popular opinion to have more effect than
+        # a lone opinion.
+        # ------------------------------------------------------
+
         ret = []  # Copy so we don't corrupt future runs.
         atari = self.atari
         total_reward = 0
         for pair in transition_minibatch:
             total_reward += self.get_reward_from_experience_pair(pair)
-        length = float(len(transition_minibatch))
         for pair in transition_minibatch:
             old_reward = self.get_reward_from_experience_pair(pair)
             new_reward = 0.0
-            if old_reward > 0 and total_reward > 0:
-                new_reward =  MAX_MINIBATCH_REWARD / length
-            elif old_reward < 0 and total_reward < 0:
-                new_reward = -MAX_MINIBATCH_REWARD / length
+            if total_reward != 0:
+                new_reward = old_reward / total_reward
             exp1, exp2 = pair
             ret.append([
                 atari.substitute_reward_in_experience(exp1, new_reward),
                 atari.substitute_reward_in_experience(exp2, new_reward)
             ])
+            print 'limited reward', new_reward,  \
+                  'old reward',     old_reward,  \
+                  'total reward',   total_reward
         return ret
 
     def forward_check(self, q_olds, transition_minibatch):
@@ -161,6 +172,7 @@ class DqnSolver(object):
             self.forward_batch(transition_batch)
         q_gradients = 1.0 / float(MINIBATCH_SIZE) * np.array(q_gradients)  # avg
         # TODO: Figure out if loss (not just gradient) needs to be calculated.
+        # TODO: Lower learning rate if q gradients are too high to mitigate exploding gradients while safely allowing higher learning rates.
         self.set_gradients_on_caffe_net(q_gradients)
         layers_orig = self.get_layer_state()
         self.solver.online_update()  # backprop

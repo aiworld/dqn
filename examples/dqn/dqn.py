@@ -47,7 +47,7 @@ def go(solver_filename, start_iter):
 
 
 def show_game():
-    if os.path.isfile(DQN_ROOT + 'show-game'):
+    if os.path.isfile(DQN_ROOT + '/show-game'):
         return True
     else:
         return False

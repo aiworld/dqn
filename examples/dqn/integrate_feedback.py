@@ -10,7 +10,7 @@ import random
 
 from boto.s3.connection import S3Connection
 from constants import DQN_ROOT, VOTE_URL, FIREBASE_URL
-from examples.dqn.secrets import ADMIN_EMAIL, ADMIN_PASSWORD, FIREBASE_KEY
+from secrets import ADMIN_EMAIL, ADMIN_PASSWORD, FIREBASE_KEY
 import secrets
 
 from firebase import firebase as fb
