@@ -3,10 +3,15 @@
 # [x] integrate reward into experiences
 # [x] populate experience pairs with human labeled experiences
 # [x] run as normal, except don't overwrite experiences
+# [ ] load experience pairs in parallel
+# [ ] don't cache experience pairs
+# [ ] see how large experience paris are normally (non-integration)
+# [ ] lower the momentum
 import json
 import os
 import psutil
 import random
+import snappy
 
 from boto.s3.connection import S3Connection
 from constants import DQN_ROOT, VOTE_URL, FIREBASE_URL
@@ -17,7 +22,8 @@ from firebase import firebase as fb
 import gzip
 
 FETCH_EPISODES = False
-INTEGRATE_DIR = DQN_ROOT + '/data/integrate/episodes/'
+INTEGRATE_DIR = DQN_ROOT + '/data/integrated/episodes/'
+EXPERIENCE_CACHE = {}
 
 
 def get_episodes():
@@ -46,7 +52,7 @@ def store_integrated_experiences():
         if not os.path.exists(pre_dir):
             os.makedirs(pre_dir)
         pre_filename  = pre_dir        + episode_number
-        post_filename = post_dir + '_' + episode_number + '.gzip'
+        post_filename = post_dir + '_' + episode_number + '.snappy'
         if not os.path.exists(pre_filename):
             episode.get_contents_to_filename(pre_filename)
         with gzip.GzipFile(pre_filename, 'r', 6) as pre_data:
@@ -58,8 +64,8 @@ def store_integrated_experiences():
         # (image_action, action, game_over, reward, votes)
         if votes:
             experiences = combine(votes, episode_data)
-            with gzip.GzipFile(post_filename, 'w', 6) as post_data:
-                post_data.write(json.dumps(experiences))
+            with open(post_filename, 'w', 6) as post_data:
+                post_data.write(snappy.compress(json.dumps(experiences)))
         i += 1
 
 
@@ -82,24 +88,53 @@ def combine(votes, episode_data):
 
 
 def get_random_experience_pairs():
-    pairs = []
-    file = random.choice(os.listdir(INTEGRATE_DIR))
-    if not file.startswith('.'):
-        print 'integrate file:', file
-        with gzip.GzipFile(INTEGRATE_DIR + file, 'r', 6) as fdata:
-            experiences = json.loads(fdata.read())
-            exp_len = len(experiences)
-            print 'pairs len:', exp_len
-            for i in xrange(0, exp_len, 2):
-                pair = experiences[i: i + 2]
-                if len(pair) != 2:
-                    print 'pair not right:', file, i
-                else:
-                    pairs.append(pair)
-    if not pairs:
+    filename = random.choice(os.listdir(INTEGRATE_DIR))
+    ret = None
+    if not filename.startswith('.'):
+        print 'integrate file:', filename
+        ret = get_experience_pairs(filename)
+    if not ret:
         return get_random_experience_pairs()
     else:
-        return pairs
+        return ret
+
+
+def get_experience_pairs(filename):
+    if filename in EXPERIENCE_CACHE:
+        print 'EXPERIENCE_CACHE hit!'
+        json_str = read_cache(filename)
+    else:
+        print 'EXPERIENCE_CACHE miss!'
+        with open(INTEGRATE_DIR + filename, 'r') as file_ref:
+            json_str = snappy.decompress(file_ref.read())
+        if psutil.phymem_usage().percent < 80:
+            write_cache(filename, json_str)
+        else:
+            print 'EXPERIENCE_CACHE FULL!'
+    return pair_experiences(json_str, filename)
+
+
+def write_cache(filename, json_str):
+    EXPERIENCE_CACHE[filename] = snappy.compress(json_str)
+    print 'EXPERIENCE_CAHCE length', len(EXPERIENCE_CACHE)
+
+
+def read_cache(filename):
+    return snappy.decompress(EXPERIENCE_CACHE[filename])
+
+
+def pair_experiences(json_str, filename):
+    ret = []
+    experiences = json.loads(json_str)
+    exp_len = len(experiences)
+    print 'pairs len:', exp_len
+    for i in xrange(0, exp_len, 2):
+        pair = experiences[i: i + 2]
+        if len(pair) != 2:
+            print 'pair not right:', filename, i
+        else:
+            ret.append(pair)
+    return ret
 
 if __name__ == '__main__':
     # store_integrated_experiences()

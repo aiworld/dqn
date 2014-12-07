@@ -115,14 +115,15 @@ class DqnSolver(object):
 
         ret = []  # Copy so we don't corrupt future runs.
         atari = self.atari
-        total_reward = 0
+        total_reward = 0.0
+        max_crowd_minibatch_reward = 0.5
         for pair in transition_minibatch:
             total_reward += self.get_reward_from_experience_pair(pair)
         for pair in transition_minibatch:
             old_reward = self.get_reward_from_experience_pair(pair)
             new_reward = 0.0
             if total_reward != 0:
-                new_reward = old_reward / total_reward
+                new_reward = max_crowd_minibatch_reward * float(old_reward) / total_reward
             exp1, exp2 = pair
             ret.append([
                 atari.substitute_reward_in_experience(exp1, new_reward),

@@ -84,8 +84,9 @@ class Atari(object):
 
     def get_random_feedback(self):
         pairs = []
-        for _ in xrange(2):
-            pairs += integrate_feedback.get_random_experience_pairs()
+        for _ in xrange(25):
+            self.pairs = integrate_feedback.get_random_experience_pairs()
+            pairs += self.pairs
         ret = deque()
         for pair in pairs:
             if len(pair) != 2:
