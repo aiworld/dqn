@@ -96,7 +96,9 @@ class Atari(object):
         return ret
 
     def check_memory(self):
-        if psutil.phymem_usage().percent > 90:
+        mem_pct = psutil.phymem_usage().percent
+        print 'mem pct is ', mem_pct, 'pairs length', len(self.experience_pairs)
+        if mem_pct > 90:
             trim = int(len(self.experience_pairs) / 2.0)
             for _ in xrange(trim):
                 try:

@@ -4,8 +4,8 @@
 # [x] populate experience pairs with human labeled experiences
 # [x] run as normal, except don't overwrite experiences
 # [ ] load experience pairs in parallel
-# [ ] don't cache experience pairs
-# [ ] see how large experience paris are normally (non-integration)
+# [x] don't cache experience pairs
+# [x] see how large experience pairs are normally (non-integration)
 # [ ] lower the momentum
 import json
 import os
@@ -24,6 +24,7 @@ import gzip
 FETCH_EPISODES = False
 INTEGRATE_DIR = DQN_ROOT + '/data/integrated/episodes/'
 EXPERIENCE_CACHE = {}
+USE_CACHE = False
 
 
 def get_episodes():
@@ -100,14 +101,14 @@ def get_random_experience_pairs():
 
 
 def get_experience_pairs(filename):
-    if filename in EXPERIENCE_CACHE:
+    if USE_CACHE and filename in EXPERIENCE_CACHE:
         print 'EXPERIENCE_CACHE hit!'
         json_str = read_cache(filename)
     else:
         print 'EXPERIENCE_CACHE miss!'
         with open(INTEGRATE_DIR + filename, 'r') as file_ref:
             json_str = snappy.decompress(file_ref.read())
-        if psutil.phymem_usage().percent < 80:
+        if USE_CACHE and psutil.phymem_usage().percent < 80:
             write_cache(filename, json_str)
         else:
             print 'EXPERIENCE_CACHE FULL!'
@@ -137,5 +138,5 @@ def pair_experiences(json_str, filename):
     return ret
 
 if __name__ == '__main__':
-    # store_integrated_experiences()
-    get_random_experience_pairs()
+    store_integrated_experiences()
+    # get_random_experience_pairs()
