@@ -39,7 +39,7 @@ class DqnSolver(object):
 
     def learn_from_experience_replay(self):
         transition_minibatch = \
-            self.atari.get_random_transitions(num=MINIBATCH_SIZE)
+            self.atari.get_random_transition_pairs(num=MINIBATCH_SIZE)
         if transition_minibatch:
             if INTEGRATE_HUMAN_FEEDBACK:
                 transition_minibatch = self.limit_rewards(transition_minibatch)
