@@ -6,7 +6,7 @@
 # [ ] load experience pairs in parallel
 # [x] don't cache experience pairs
 # [x] see how large experience pairs are normally (non-integration)
-# [ ] lower the momentum
+# [x] lower the momentum
 import json
 import os
 import psutil
