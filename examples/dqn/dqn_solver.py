@@ -10,7 +10,7 @@ import os
 import sys
 import atari_actions as actions
 from utils import vis_square, get_image_path, l1_norm
-from constants import LAYER_NAMES, INTEGRATE_HUMAN_FEEDBACK
+from constants import LAYER_NAMES, INTEGRATE_HUMAN_FEEDBACK, PLOT_LAYERS
 from episode_stats import EpisodeStat
 
 
@@ -200,7 +200,7 @@ class DqnSolver(object):
                 4, 4)  # h, w
             vis_square(filters, im_name='conv2', batch=self.start_timestamp)
             del filters
-            if self.iter % 15000 == 0:
+            if PLOT_LAYERS and self.iter % 15000 == 0:
                 # TODO: Solve memory leak before saving more frequently by using
                 # multi-process.
                 self.plot_layers()
