@@ -1,4 +1,5 @@
 import json
+import multiprocessing
 import random
 import itertools
 import os.path
@@ -13,31 +14,28 @@ import time
 import psutil
 import subprocess
 
-from constants import DQN_ROOT, INTEGRATE_HUMAN_FEEDBACK
-import integrate_feedback
+from constants import *
+import experience_loader
 import utils
 from ntsc_palette import NTSCPalette
 from create_action_sidebar import ActionSidebarImages
 import secrets
-import atari_actions
-
-EXP_IMAGE_ACTION_INDEX = 0
-EXP_ACTION_INDEX       = 1
-EXP_GAME_OVER_INDEX    = 2
-EXP_REWARD_INDEX       = 3
-EXP_SCREEN_HEX_INDEX   = 4
 
 MAX_HISTORY_LENGTH = 1000000
 
-EXPERIENCE_PAIRS = deque(maxlen=MAX_HISTORY_LENGTH)
+
+if INTEGRATE_HUMAN_FEEDBACK:
+    experience_pairs = experience_loader.get_queue()
+else:
+    # This size ends up being cut down considerably due to check_mem,
+    # need to implement multiprocessing queue to load from disk as with
+    # integrate experiences above.
+    experience_pairs = deque(maxlen=MAX_HISTORY_LENGTH)
 
 
 class Atari(object):
     def __init__(self, log_dir_name, episode_num, start_timestamp, show=False):
-        if INTEGRATE_HUMAN_FEEDBACK:
-            self.experience_pairs = self.get_random_feedback()
-        else:
-            self.experience_pairs = EXPERIENCE_PAIRS
+        self.experience_pairs = experience_pairs
         self.log_dir_name = log_dir_name
         self.episode_num = episode_num
         self.start_timestamp = start_timestamp
@@ -79,26 +77,26 @@ class Atari(object):
             '-frame_skip',          '3',  # TODO: Change to 4 for other games per dqn paper.
             rom_location + rom_file
         ]
-        self.check_memory()
+        if not INTEGRATE_HUMAN_FEEDBACK:
+            self.check_memory()
         return subprocess.Popen(args, cwd='/s/ale_0.4.4/ale_0_4/', close_fds=True)
 
-    def get_random_feedback(self):
-        pairs = []
-        for _ in xrange(25):
-            self.pairs = integrate_feedback.get_random_experience_pairs()
-            pairs += self.pairs
-        ret = deque()
-        for pair in pairs:
-            if len(pair) != 2:
-                print pair
-            e1, e2 = pair
-            ret.append([self.deserialize(e1), self.deserialize(e2)])
-        return ret
+    # def get_random_feedback(self):
+    #     pairs = []
+    #     for _ in xrange(25):
+    #         pairs += integrate_feedback.get_random_experience_pairs()
+    #     ret = deque()
+    #     for pair in pairs:
+    #         if len(pair) != 2:
+    #             print pair
+    #         e1, e2 = pair
+    #         ret.append([self.deserialize(e1), self.deserialize(e2)])
+    #     return ret
 
     def check_memory(self):
         mem_pct = psutil.phymem_usage().percent
         print 'mem pct is ', mem_pct, 'pairs length', len(self.experience_pairs)
-        if mem_pct > 90:
+        if mem_pct > 80:
             trim = int(len(self.experience_pairs) / 2.0)
             for _ in xrange(trim):
                 try:
@@ -158,13 +156,16 @@ class Atari(object):
     def send_action(self, action):
         self.write("%d,%d\n" % (action.value, 18))  # 18 = Noop player b.
 
-    def get_random_transitions(self, num):
-        if len(self.experience_pairs) > num:
-            i = random.randint(0, len(self.experience_pairs) - num)
-            return list(itertools.islice(self.experience_pairs, i, i + num))
+    def get_random_transition_pairs(self, num):
+        if INTEGRATE_HUMAN_FEEDBACK:
+            return [experience_pairs.get() for _ in xrange(num)]
         else:
-            return []
-    #
+            if len(self.experience_pairs) > num:
+                i = random.randint(0, len(self.experience_pairs) - num)
+                return list(itertools.islice(self.experience_pairs, i, i + num))
+            else:
+                return []
+
     # def record_rewarding_experience(self, experience_pair, total_reward):
     #     if self.previous_experience and total_reward != 0 or self.game_over:
     #         # Record pairs of experiences where the second experience contains
@@ -180,7 +181,10 @@ class Atari(object):
             total_reward += reward
             ret.append(experience)
             frames.append(frame)
-        if not INTEGRATE_HUMAN_FEEDBACK:
+        if INTEGRATE_HUMAN_FEEDBACK:
+
+            pass
+        else:
             # We already stored this experience if we are integrating human feedback.
             self.store_experience(frames, ret)
         return ret
@@ -218,18 +222,6 @@ class Atari(object):
                 'reward'       : frame[EXP_REWARD_INDEX],
                 'screen_hex'   : frame[EXP_SCREEN_HEX_INDEX]
             })
-        return ret
-
-    def deserialize(self, frames):
-        ret = []
-        for exp in frames:
-            r = [None] * 5
-            r[EXP_IMAGE_ACTION_INDEX] =                   exp['image_action']
-            r[EXP_ACTION_INDEX]       = atari_actions.ALL[exp['action']]
-            r[EXP_GAME_OVER_INDEX]    =                   exp['game_over']
-            r[EXP_REWARD_INDEX]       =                   exp['reward']
-            r[EXP_SCREEN_HEX_INDEX]   =                   exp['screen_hex']
-            ret.append(r)
         return ret
 
     def zip_and_delete(self):
