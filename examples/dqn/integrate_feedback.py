@@ -7,10 +7,10 @@
 # [x] don't cache experience pairs
 # [x] see how large experience pairs are normally (non-integration)
 # [x] lower the momentum
-# [ ] create experience deque that separate process pushes to, and solver pulls from.
-# [ ] solver should ideally have a thread that loads the next experience minibatch from the deque
-# [ ] increase the minibatch pool by
-# [ ] turn momentum and learning rate back up
+# [x] create experience deque that separate process pushes to, and solver pulls from.
+# [x] solver should ideally have a thread that loads the next experience minibatch from the deque
+# [ ] increase the minibatch pool by ?
+# [x] turn momentum and learning rate back up
 import json
 import os
 import threading
@@ -53,7 +53,7 @@ def store_integrated_experiences():
         print str(i) + ' ' + str(len(episodes))
         episode = episodes[i]
         episode_directory, episode_number = episode.key.split('/')
-        pre_dir  = DQN_ROOT + '/data/s3/episodes/'        + episode_directory
+        pre_dir  = DQN_ROOT + '/data/s3/episodes/' + episode_directory
         post_dir = INTEGRATE_DIR + episode_directory
         if not os.path.exists(pre_dir):
             os.makedirs(pre_dir)
@@ -90,12 +90,6 @@ def save_snappy_file(episode_directory, episode_number, fire, post_filename,
             post_data.write(snappy.compress(json.dumps(experiences)))
 
 
-def add_votes_property(frames):
-    for frame in frames:
-        for sub_frame in frame:
-            sub_frame['votes'] = 0
-
-
 def combine(votes, episode_data):
     frames = episode_data['frames']
     add_votes_property(frames)
@@ -107,6 +101,11 @@ def combine(votes, episode_data):
             sub_frame['reward'] -= 1
     return frames
 
+
+def add_votes_property(frames):
+    for frame in frames:
+        for sub_frame in frame:
+            sub_frame['votes'] = 0
 
 # def get_random_experience_pairs():
 #     filename = random.choice(os.listdir(INTEGRATE_DIR))

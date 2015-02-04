@@ -51,7 +51,7 @@ class DqnSolver(object):
             return EpisodeStat(0.0, [], 0.0)
 
     def extend_game_over_into_past(self, transition_minibatch):
-        ret = [] # Copy so we don't corrupt future runs.
+        ret = []  # Copy so we don't corrupt future runs.
         tm = transition_minibatch
         atari = self.atari
 
