@@ -1,1 +1,1 @@
-__author__ = 'cq'
+from .. import secrets
