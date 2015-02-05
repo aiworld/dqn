@@ -71,7 +71,7 @@ class DqnSolver(object):
 
     def should_propagate(self, i, transition):
         return i >= (GAME_OVER_STEPS - 1) and (
-            os.environ.has_key('TEST_NEGATIVE_REWARD_DECAY')
+            os.environ.has_key('TEST_NEGATIVE_REWARD_DECAY')  # Just for quickly sanity testing this block.
             or
             self.atari.get_game_over_from_experience(transition[0])
             or
@@ -99,19 +99,12 @@ class DqnSolver(object):
         Get the total reward for minibatch
         If reward positive, divide among positives, zero out negatives
         If negative, divide among negatives, zero positives.
-        This became necessary after combining the crowdsourced rewards from
-        several people.
+        This became necessary for combining crowdsourced rewards.
         :param transition_minibatch:
         :return: copy of transition_minibatch with rewards limited to a max
         total reward across the minibatch. Only dominant reward across minibatch
         (positive or negative) will be used.
         """
-        # TODO: Train on one session at a time -----------------
-        # We should not combine votes for game,
-        # but rather train on one session at a time.
-        # This would allow a popular opinion to have more effect than
-        # a lone opinion.
-        # ------------------------------------------------------
 
         ret = []  # Copy so we don't corrupt future runs.
         atari = self.atari
@@ -136,6 +129,7 @@ class DqnSolver(object):
 
     def forward_check(self, q_olds, transition_minibatch):
         """Sanity check that we are moving in the right direction"""
+        # TODO: Proper finite-difference gradient check
         improvement = 0
         for i, transition in enumerate(transition_minibatch):
             q_max, q_values, action_index, reward = \
@@ -202,7 +196,7 @@ class DqnSolver(object):
             del filters
             if PLOT_LAYERS and self.iter % 15000 == 0:
                 # TODO: Solve memory leak before saving more frequently by using
-                # multi-process.
+                # multi-process sandboxing.
                 self.plot_layers()
 
     def get_layer_state(self):
