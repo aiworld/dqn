@@ -42,7 +42,7 @@ class DqnSolver(object):
             self.atari.get_random_transition_pairs(num=MINIBATCH_SIZE)
         if transition_minibatch:
             if INTEGRATE_HUMAN_FEEDBACK:
-                transition_minibatch = self.limit_rewards(transition_minibatch)
+                transition_minibatch = self.normalize_rewards(transition_minibatch)
             else:
                 transition_minibatch = \
                     self.extend_game_over_into_past(transition_minibatch)
@@ -94,12 +94,8 @@ class DqnSolver(object):
             q_gradients[action_index] += q_old - q_new
         return q_gradients, q_max_sum, q_sum, q_olds
 
-    def limit_rewards(self, transition_minibatch):
+    def normalize_rewards(self, transition_minibatch):
         """
-        Get the total reward for minibatch
-        If reward positive, divide among positives, zero out negatives
-        If negative, divide among negatives, zero positives.
-        This became necessary for combining crowdsourced rewards.
         :param transition_minibatch:
         :return: copy of transition_minibatch with rewards limited to a max
         total reward across the minibatch. Only dominant reward across minibatch
@@ -108,24 +104,44 @@ class DqnSolver(object):
 
         ret = []  # Copy so we don't corrupt future runs.
         atari = self.atari
-        total_reward = 0.0
-        max_crowd_minibatch_reward = 0.5
+        max_batch_reward = 0.5
+        death_in_minibatch, total_reward = self.get_reward_aggregates(
+            transition_minibatch)
+
         for pair in transition_minibatch:
-            total_reward += self.get_reward_from_experience_pair(pair)
-        for pair in transition_minibatch:
-            old_reward = self.get_reward_from_experience_pair(pair)
+            reward = self.get_reward_from_experience_pair(pair)
             new_reward = 0.0
-            if total_reward != 0:
-                new_reward = max_crowd_minibatch_reward * float(old_reward) / total_reward
+            if death_in_minibatch and reward > 0:
+                # If death in minibatch, don't count positive rewards.
+                new_reward = 0.0
+            elif total_reward != 0 and reward != 0:
+                new_reward = max_batch_reward * float(reward) / total_reward
             exp1, exp2 = pair
             ret.append([
                 atari.substitute_reward_in_experience(exp1, new_reward),
                 atari.substitute_reward_in_experience(exp2, new_reward)
             ])
             print 'limited reward', new_reward,  \
-                  'old reward',     old_reward,  \
+                  'old reward',     reward,      \
                   'total reward',   total_reward
         return ret
+
+    def get_reward_aggregates(self, transition_minibatch):
+        total_pos_reward = 0.0
+        total_neg_reward = 0.0
+        death_in_minibatch = False
+        for pair in transition_minibatch:
+            reward = self.get_reward_from_experience_pair(pair)
+            if reward < 0:
+                death_in_minibatch = True
+                total_neg_reward += reward
+            else:
+                total_pos_reward += reward
+        if death_in_minibatch:
+            total_reward = total_neg_reward * -1
+        else:
+            total_reward = total_pos_reward
+        return death_in_minibatch, total_reward
 
     def forward_check(self, q_olds, transition_minibatch):
         """Sanity check that we are moving in the right direction"""

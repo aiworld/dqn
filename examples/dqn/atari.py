@@ -264,7 +264,12 @@ class Atari(object):
         ret = 0
         if self.get_game_over_from_experience(experience):
             print '\n\n\n\GAME OVER\n\n\n\n'
-            ret = -1
+            if INTEGRATE_HUMAN_FEEDBACK:
+                # Game over is replaced by more accurate
+                # crowdsourced-detected deaths.
+                ret = 0
+            else:
+                ret = -1
         elif score > 0:
             ret = 1
         elif score < 0:
