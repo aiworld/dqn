@@ -25,14 +25,43 @@ def go(solver_filename, start_iter):
     episode_stats = EpisodeStats()
     dqn = DqnSolver(atari, net, solver, start_timestamp, start_iter)
     while dqn.iter < xrange(int(1E7)):  # 10 million training steps
+
+        time1 = time.time()
         experience = atari.experience(EXPERIENCE_WINDOW_SIZE, action)
+        time2 = time.time()
+        print '%s function took %0.3f ms' % \
+              ('experience', (time2 - time1) * 1000.0)
+
+        time1 = time.time()
         q, action = dqn.perceive(experience)
+        time2 = time.time()
+        print '%s function took %0.3f ms' %\
+              ('perceive', (time2 - time1) * 1000.0)
+
+
+        time1 = time.time()
         exploit = dqn.should_exploit()
+        time2 = time.time()
+        print '%s function took %0.3f ms' %\
+              ('should-exploit', (time2 - time1) * 1000.0)
+
         if not exploit:
             action = actions.get_random_action()
+
+        time1 = time.time()
         episode_stat = dqn.learn_from_experience_replay()
+        time2 = time.time()
+        print '%s function took %0.3f ms' %\
+              ('learn', (time2 - time1) * 1000.0)
+
+        time1 = time.time()
         dqn.record_episode_stats(episode_stats, experience, q, action, exploit,
                                  episode_stat)
+        time2 = time.time()
+        print '%s function took %0.3f ms' %\
+              ('record', (time2 - time1) * 1000.0)
+
+
         if atari.game_over or 'TEST_AFTER_GAME' in os.environ:
             EpisodeStats.log_csv(episode_count, episode_stats, log_file_name)
             episode_count += 1
@@ -44,7 +73,6 @@ def go(solver_filename, start_iter):
                           show_game())
         dqn.iter += 1
         print 'dqn iteration: ', dqn.iter
-
 
 def show_game():
     if os.path.isfile(DQN_ROOT + '/show-game'):

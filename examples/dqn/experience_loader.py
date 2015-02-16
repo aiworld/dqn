@@ -1,13 +1,17 @@
 import json
 import multiprocessing
+from threading import Thread
+from Queue import Queue
 import traceback
-import os
 import random
+import time
 import snappy
 from constants import *
 import atari_actions
+from constants import MINIBATCH_SIZE
 
-NUM_PRODUCERS = 2
+MAX_QUEUE_SIZE = 2
+NUM_PRODUCERS  = 2
 
 
 def producer(q):
@@ -17,9 +21,18 @@ def producer(q):
             if not filename.startswith('.'):
                 print 'integrate file: ' + filename
                 pairs = load_experience_pairs(filename)
-                for pair in pairs:
-                    q.put(pair)  # blocks when q is full
-                print 'experience queue size is ' + str(q.qsize())
+                # if q full, add batch to standby
+                # else, put batch into q
+                diff = 0
+                for batch in chunks(pairs, MINIBATCH_SIZE):
+                    # time.sleep(diff)
+                    time1 = time.time()
+                    q.put(batch)  # blocks when q is full
+                    time2 = time.time()
+                    diff = time2 - time1
+                    print '%s function took %0.3f ms' %\
+                          ('queue-put', diff * 1000.0)
+                    print 'experience queue size is ' + str(q.qsize())
     except:
         # Background process exceptions don't bubble up.
         print "FATAL: load experiences worker exited while multiprocessing"
@@ -27,11 +40,11 @@ def producer(q):
 
 
 def get_queue():
-    mgr = multiprocessing.Manager()
-    q = mgr.Queue(maxsize=1000)
+    q = Queue(maxsize=MAX_QUEUE_SIZE)
     for _ in xrange(NUM_PRODUCERS):
-        multiprocessing.Process(
-            target=producer, args=(q,)).start()
+        worker = Thread(target=producer, args=(q,))
+        worker.setDaemon(True)
+        worker.start()
     return q
 
 
@@ -70,7 +83,14 @@ def deserialize(frames):
         ret.append(r)
     return ret
 
+
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i + n]
+
 if __name__ == '__main__':
     test_mgr = multiprocessing.Manager()
-    test_q = test_mgr.Queue(maxsize=1000)
+    test_q = test_mgr.Queue(maxsize=MAX_QUEUE_SIZE)
     producer(test_q)

@@ -158,7 +158,12 @@ class Atari(object):
 
     def get_random_transition_pairs(self, num):
         if INTEGRATE_HUMAN_FEEDBACK:
-            return [experience_pairs.get() for _ in xrange(num)]
+            time1 = time.time()
+            ret = experience_pairs.get()
+            time2 = time.time()
+            print '%s function took %0.3f ms' % \
+                  ('queue-get', (time2 - time1) * 1000.0)
+            return ret
         else:
             if len(self.experience_pairs) > num:
                 i = random.randint(0, len(self.experience_pairs) - num)

@@ -1,8 +1,12 @@
+print 'importing...'
 import pandas as pd
+print 'imported pandas'
 import matplotlib.pyplot as plt
+print 'imported matplotlib'
 from dateutil.parser import parse as dateparse
 from dateutil import tz
 import grab_training_file_from_dropbox
+print 'importing arrow...'
 import arrow
 
 print 'downloading csv...'
@@ -13,7 +17,13 @@ max_mean = 0
 max_info = None
 means = []
 end = 0
-for i in xrange(len(data.score_total) / 100):
+num_games = len(data.score_total)
+print 'num_games is ', num_games
+if num_games <= 100:
+    print 'not yet over 100 games, just', num_games
+    exit(0)
+
+for i in xrange(num_games / 100):
     start = i * 100
     end = min(start + 100, len(data.score_total))
     mean = data.score_total[start:end].mean()
@@ -44,6 +54,9 @@ print 'max avg score:', (str(max_info[0]) + ','),\
     '(' + str(game_moves_latest) + '/' + str(int(round(game_duration))) + ')', \
     'moves/second -', arrow.get(last_game_time).humanize()
 
+if len(means) < 2:
+    print 'only one data point (100 game avg), not plotting'
+    exit(0)
 ts = pd.Series(means)
 ts.plot()
 plt.savefig('average_scores.png')

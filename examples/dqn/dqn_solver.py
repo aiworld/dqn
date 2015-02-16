@@ -1,5 +1,6 @@
 import random
 import math
+import time
 import os.path
 import gc
 from scipy.spatial import distance
@@ -10,7 +11,7 @@ import os
 import sys
 import atari_actions as actions
 from utils import vis_square, get_image_path, l1_norm
-from constants import LAYER_NAMES, INTEGRATE_HUMAN_FEEDBACK, PLOT_LAYERS
+from constants import LAYER_NAMES, INTEGRATE_HUMAN_FEEDBACK, PLOT_LAYERS, MINIBATCH_SIZE
 from episode_stats import EpisodeStat
 
 
@@ -21,7 +22,6 @@ EPSILON_ANNEALING_TIME = 1E6
 EPSILON_END = 0.1
 EPSILON_SLOPE = -(1.0 - EPSILON_END) / EPSILON_ANNEALING_TIME
 GAMMA = 0.8  # Using pac-man value.
-MINIBATCH_SIZE = 32
 LEARNING_RATE = 0.6
 GAME_OVER_STEPS = 32  # Takes 13 steps for player to die in space invaders. Need to generalize this.
 GET_IMPROVEMENT = False
@@ -38,15 +38,31 @@ class DqnSolver(object):
         self.start_timestamp = start_timestamp
 
     def learn_from_experience_replay(self):
+        time1 = time.time()
         transition_minibatch = \
             self.atari.get_random_transition_pairs(num=MINIBATCH_SIZE)
+        print 'len of pairs ', len(transition_minibatch)
+        time2 = time.time()
+        print '%s function took %0.3f ms' %\
+              ('get-minibatch', (time2 - time1) * 1000.0)
+
         if transition_minibatch:
             if INTEGRATE_HUMAN_FEEDBACK:
+                time1 = time.time()
                 transition_minibatch = self.normalize_rewards(transition_minibatch)
+                time2 = time.time()
+                print '%s function took %0.3f ms' %\
+                      ('normalize-reward', (time2 - time1) * 1000.0)
             else:
                 transition_minibatch = \
                     self.extend_game_over_into_past(transition_minibatch)
-            return self.process_minibatch(transition_minibatch)
+
+            time1 = time.time()
+            ret = self.process_minibatch(transition_minibatch)
+            time2 = time.time()
+            print '%s function took %0.3f ms' %\
+                  ('process-minibatch', (time2 - time1) * 1000.0)
+            return ret
         else:
             return EpisodeStat(0.0, [], 0.0)
 
@@ -181,7 +197,7 @@ class DqnSolver(object):
         # self.improvement_check_one(transition_batch)
         q_gradients, q_max_sum_orig, q_sum_orig, q_olds = \
             self.forward_batch(transition_batch)
-        q_gradients = 1.0 / float(MINIBATCH_SIZE) * np.array(q_gradients)  # avg
+        q_gradients = 1.0 / float(len(transition_batch)) * np.array(q_gradients)  # avg
         # TODO: Figure out if loss (not just gradient) needs to be calculated.
         # TODO: Lower learning rate if q gradients are too high to mitigate exploding gradients while safely allowing higher learning rates.
         self.set_gradients_on_caffe_net(q_gradients)
