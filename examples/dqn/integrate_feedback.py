@@ -24,12 +24,14 @@ import snappy
 import numpy
 from boto.s3.connection import S3Connection
 import time
+from multiprocessing import Pool
 
 from constants import DQN_ROOT, VOTE_URL, FIREBASE_URL, INTEGRATE_DIR
 from secrets import ADMIN_EMAIL, ADMIN_PASSWORD, FIREBASE_KEY, DQN_AWS_ID, DQN_AWS_SECRET
 
 from firebase import firebase as fb
 import gzip
+
 
 FETCH_EPISODES = False
 EXPERIENCE_CACHE = {}
@@ -42,6 +44,8 @@ def store_integrated_experiences(parallel=True):
     fire = fb.FirebaseApplication(FIREBASE_URL, auth)
     i = 0
     mem_pct = psutil.phymem_usage().percent
+    if parallel:
+        process_pool = Pool(processes=10)
     while i < len(episodes) and mem_pct < 100:
         episode = episodes[i]
         episode_directory, episode_number = episode.key.split('/')
@@ -59,11 +63,14 @@ def store_integrated_experiences(parallel=True):
         else:
             if parallel:
                 save_snappy_file_pll(episode_directory, episode_number, fire,
-                             post_filename, pre_filename)
+                             post_filename, pre_filename, process_pool)
             else:
                 save_snappy_file(episode_directory, episode_number, fire,
                              post_filename, pre_filename)
         i += 1
+    if parallel:
+        process_pool.close()
+        process_pool.join()
 
 
 def get_episodes():
@@ -78,8 +85,8 @@ def get_episodes():
 
 
 def save_snappy_file_pll(episode_directory, episode_number, fire,
-                             post_filename, pre_filename):
-    threading.Thread(target=save_snappy_file, args=(episode_directory,
+                             post_filename, pre_filename, process_pool):
+    process_pool.apply_async(save_snappy_file, (episode_directory,
                             episode_number, fire, post_filename, pre_filename))
 
 
@@ -261,5 +268,5 @@ def combine(votes, episode_data):
 
 
 if __name__ == '__main__':
-    store_integrated_experiences(parallel=False)
+    store_integrated_experiences(parallel=True)
     # get_all_experience_pairs()
